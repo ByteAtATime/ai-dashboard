@@ -211,7 +211,7 @@ INSTRUCTIONS:
 {
   "sql": "The SQL query (without backticks or markdown)",
   "display": {
-    "type": "table | stats | barchart | linechart | piechart",
+    "type": "table | stats",
     ...displayConfigFields
   },
   "explanation": "Brief explanation of the query approach (optional)"
@@ -244,15 +244,6 @@ DISPLAY TYPE DETAILS:
     ...
   ],
   "summary": "Optional overall interpretation"
-}
-
-3. For charts:
-{
-  "type": "barchart | linechart | piechart",
-  "xAxis": "column_for_x_axis",
-  "yAxis": "column_for_y_axis",
-  "groupBy": "optional_grouping_column",
-  "title": "Chart title"
 }
 
 IMPORTANT:

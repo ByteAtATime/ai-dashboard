@@ -210,16 +210,6 @@
 				<DataTable data={results} columns={(displayConfig as TableDisplay).columns} />
 			{:else if displayConfig.type === 'stats'}
 				<StatsCard data={results} stats={(displayConfig as StatsDisplay).stats} />
-			{:else if displayConfig.type === 'barchart' || displayConfig.type === 'linechart'}
-				<div
-					class="mb-6 rounded-md border border-dashed border-gray-300 bg-gray-50 p-8 text-center"
-				>
-					<p class="mb-4 text-gray-700">
-						Chart visualization would appear here ({displayConfig.type})
-					</p>
-					<!-- In a real implementation, we would use a charting library like Chart.js or D3 -->
-					<DataTable data={results} />
-				</div>
 			{/if}
 		</div>
 	{/if}
