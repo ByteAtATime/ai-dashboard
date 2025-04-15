@@ -188,7 +188,7 @@ function formatSchemaForAI(schema: DatabaseSchema): string {
 
 	output += '## Tables\n';
 	for (const table of schema.tables) {
-		output += `### ${table.name} (~${table.rowCount} rows)\n`;
+		output += `### ${table.name} (${table.rowCount} rows)\n`;
 
 		output += '#### Columns:\n';
 		for (const column of table.columns) {
@@ -201,19 +201,10 @@ function formatSchemaForAI(schema: DatabaseSchema): string {
 				output += ` [FOREIGN KEY → ${column.foreignTable}.${column.foreignColumn}]`;
 			output += '\n';
 		}
-
-		if (table.sampleRows.length > 0) {
-			output += '#### Sample Data:\n';
-			const sample = table.sampleRows.slice(0, 3);
-			const columns = Object.keys(sample[0]);
-			output += `| ${columns.join(' | ')} |\n`;
-			output += `| ${columns.map(() => '---').join(' | ')} |\n`;
-			for (const row of sample) {
-				output += `| ${columns.map((col) => JSON.stringify(row[col])).join(' | ')} |\n`;
-			}
-		}
 		output += '\n';
 	}
+
+	console.log(output);
 
 	return output;
 }

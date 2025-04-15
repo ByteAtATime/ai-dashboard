@@ -2,7 +2,6 @@ import { env } from '$env/dynamic/private';
 import pg from 'pg';
 import type { Pool, PoolClient, QueryResult } from 'pg';
 
-// Type definitions for better type safety
 export type DatabaseColumn = {
 	name: string;
 	type: string;
@@ -22,7 +21,6 @@ export type DatabaseTable = {
 	name: string;
 	columns: DatabaseColumn[];
 	rowCount: number;
-	sampleRows: Record<string, unknown>[];
 };
 
 export type DatabaseEnum = {
@@ -43,7 +41,7 @@ const pool: Pool = new pg.Pool({
 });
 
 let schemaCache: DatabaseSchema | null = null;
-const CACHE_TTL_MS = 3600000; // 1 hour cache
+const CACHE_TTL_MS = 3600000;
 
 export async function getFullSchema(): Promise<DatabaseSchema> {
 	if (schemaCache && Date.now() - schemaCache.lastUpdated < CACHE_TTL_MS) {
@@ -57,19 +55,8 @@ export async function getFullSchema(): Promise<DatabaseSchema> {
 			fetchEnums(client)
 		]);
 
-		// Get sample rows and row counts for each table
-		const tablesWithSamples = await Promise.all(
-			tablesResult.map(async (table) => {
-				const [sampleRows, rowCount] = await Promise.all([
-					fetchSampleRows(client, table.name, 5),
-					fetchTableRowCount(client, table.name)
-				]);
-				return { ...table, sampleRows, rowCount };
-			})
-		);
-
 		schemaCache = {
-			tables: tablesWithSamples,
+			tables: tablesResult,
 			enums: enumsResult,
 			lastUpdated: Date.now()
 		};
@@ -82,7 +69,7 @@ export async function getFullSchema(): Promise<DatabaseSchema> {
 
 async function fetchTablesWithMetadata(
 	client: PoolClient
-): Promise<Omit<DatabaseTable, 'sampleRows' | 'rowCount'>[]> {
+): Promise<Omit<DatabaseTable, 'sampleRows'>[]> {
 	const query = `
     WITH primary_keys AS (
       SELECT
@@ -92,6 +79,20 @@ async function fetchTablesWithMetadata(
       JOIN pg_class ON pg_class.oid = pg_index.indrelid
       JOIN pg_attribute ON pg_attribute.attrelid = pg_class.oid AND pg_attribute.attnum = ANY(pg_index.indkey)
       WHERE pg_index.indisprimary
+    ),
+    table_counts AS (
+      SELECT
+        table_schema,
+        table_name,
+        (xpath('/row/cnt/text()', xml_count))[1]::text::int AS row_count
+      FROM (
+        SELECT
+          table_name,
+          table_schema,
+          query_to_xml(format('select count(*) as cnt from %I.%I', table_schema, table_name), false, true, '') AS xml_count
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+      ) t
     )
     SELECT
       columns.table_name AS name,
@@ -106,7 +107,8 @@ async function fetchTablesWithMetadata(
       COALESCE(pk.column_name IS NOT NULL, false) AS is_primary_key,
       COALESCE(fk.constraint_type = 'FOREIGN KEY', false) AS is_foreign_key,
       fk.foreign_table_name AS foreign_table,
-      fk.foreign_column_name AS foreign_column
+      fk.foreign_column_name AS foreign_column,
+      tc.row_count AS row_count
     FROM information_schema.columns
     LEFT JOIN primary_keys pk ON 
       pk.table_name = columns.table_name AND 
@@ -127,18 +129,21 @@ async function fetchTablesWithMetadata(
     ) fk ON
       fk.table_name = columns.table_name AND
       fk.column_name = columns.column_name
+    LEFT JOIN table_counts tc ON
+      tc.table_name = columns.table_name
     WHERE columns.table_schema = 'public'
     ORDER BY columns.table_name, columns.ordinal_position
   `;
 
 	const result = await client.query(query);
-	const tablesMap = new Map<string, Omit<DatabaseTable, 'sampleRows' | 'rowCount'>>();
+	const tablesMap = new Map<string, Omit<DatabaseTable, 'sampleRows'>>();
 
 	for (const row of result.rows) {
 		if (!tablesMap.has(row.name)) {
 			tablesMap.set(row.name, {
 				name: row.name,
-				columns: []
+				columns: [],
+				rowCount: row.row_count
 			});
 		}
 
@@ -236,7 +241,7 @@ export async function executeReadOnlyQuery(
 }
 
 function validateTableName(tableName: string): void {
-	if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+	if (!/^[a-zA_Z_][a-zA-Z0-9_]*$/.test(tableName)) {
 		throw new Error(`Invalid table name: ${tableName}`);
 	}
 }
