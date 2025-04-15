@@ -187,6 +187,14 @@ export async function generateSQL(
 	query: string,
 	schema: DatabaseSchema
 ): Promise<{ sql: string; display: DisplayConfig; explanation?: string }> {
+	return generateSQLWithProgress(query, schema);
+}
+
+export async function generateSQLWithProgress(
+	query: string,
+	schema: DatabaseSchema,
+	progressCallback?: (progress: string) => Promise<void>
+): Promise<{ sql: string; display: DisplayConfig; explanation?: string }> {
 	const schemaDescription = formatSchemaForAI(schema);
 
 	const systemPrompt = `You are an expert SQL engineer that translates natural language queries into PostgreSQL SQL.
@@ -288,6 +296,10 @@ IMPORTANT:
 		let finalResponse: { sql: string; display: DisplayConfig; explanation?: string } | null = null;
 
 		while (!finalResponse) {
+			if (progressCallback) {
+				await progressCallback('Generating SQL query...');
+			}
+			
 			const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 				method: 'POST',
 				headers: {
@@ -348,6 +360,9 @@ IMPORTANT:
 
 					let functionResult;
 					if (functionName === 'sampleTable') {
+						if (progressCallback) {
+							await progressCallback(`Sampling ${functionArgs.numRows} rows from \`${functionArgs.tableName}\` table`);
+						}
 						functionResult = await sampleTable(functionArgs.tableName, functionArgs.numRows);
 					} else {
 						throw new Error(`Unknown function: ${functionName}`);
@@ -365,6 +380,9 @@ IMPORTANT:
 				try {
 					const jsonResponse = JSON.parse(content);
 					if (jsonResponse.sql && jsonResponse.display) {
+						if (progressCallback) {
+							await progressCallback('Finalizing SQL query');
+						}
 						finalResponse = {
 							sql: jsonResponse.sql,
 							display: jsonResponse.display,

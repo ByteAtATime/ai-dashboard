@@ -9,6 +9,8 @@
 	let results = $state<Record<string, any>[]>([]);
 	let sqlQuery = $state('');
 	let displayConfig = $state<DisplayConfig | null>(null);
+	let progressMessages = $state<string[]>([]);
+	let showProgress = $state(false);
 
 	async function submitQuery() {
 		if (!query.trim()) {
@@ -18,9 +20,14 @@
 
 		isLoading = true;
 		error = '';
+		progressMessages = [];
+		showProgress = true;
+		results = [];
+		sqlQuery = '';
+		displayConfig = null;
 
 		try {
-			const response = await fetch('/api/query', {
+			const response = await fetch('/api/query/stream', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -29,18 +36,52 @@
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error || 'Failed to process query');
+				throw new Error(`Server error: ${response.status}`);
 			}
 
-			const data = await response.json();
+			const reader = response.body?.getReader();
+			if (!reader) {
+				throw new Error('Stream reader not available');
+			}
 
-			results = data.results || [];
-			sqlQuery = data.sql || '';
-			displayConfig = data.display || {
-				type: 'table',
-				columns: {}
-			};
+			const decoder = new TextDecoder();
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				
+				if (done) {
+					break;
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+				
+				for (const line of lines) {
+					if (!line.trim()) continue;
+					
+					try {
+						const data = JSON.parse(line);
+						
+						if (data.type === 'progress') {
+							progressMessages = [...progressMessages, data.message];
+						} else if (data.type === 'result') {
+							results = data.data.results || [];
+							sqlQuery = data.data.sql || '';
+							displayConfig = data.data.display || {
+								type: 'table',
+								columns: {}
+							};
+						} else if (data.type === 'error') {
+							error = data.error || 'An unexpected error occurred';
+						}
+					} catch (e) {
+						console.error('Error parsing streaming response:', e, line);
+					}
+				}
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			console.error('Query error:', err);
@@ -55,6 +96,8 @@
 		sqlQuery = '';
 		error = '';
 		displayConfig = null;
+		progressMessages = [];
+		showProgress = false;
 	}
 </script>
 
@@ -118,6 +161,39 @@
 				<line x1="12" y1="16" x2="12.01" y2="16"></line>
 			</svg>
 			<span>{error}</span>
+		</div>
+	{/if}
+
+	{#if showProgress && progressMessages.length > 0}
+		<div class="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
+			<h3 class="mb-2 text-sm font-medium text-blue-800">Processing Progress</h3>
+			<ul class="space-y-1">
+				{#each progressMessages as message}
+					<li class="flex items-center gap-2 text-blue-700">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							class="flex-shrink-0"
+						>
+							<polyline points="20 6 9 17 4 12"></polyline>
+						</svg>
+						<span>{message}</span>
+					</li>
+				{/each}
+				{#if isLoading}
+					<li class="flex items-center gap-2 text-blue-700">
+						<div class="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+						<span>Processing...</span>
+					</li>
+				{/if}
+			</ul>
 		</div>
 	{/if}
 
