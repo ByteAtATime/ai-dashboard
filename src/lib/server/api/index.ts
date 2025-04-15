@@ -27,15 +27,23 @@ export class Api {
 
 				const schema = await getFullSchema();
 
-				const { sql, display } = await generateSQL(query, schema);
-
-				const results = await executeReadOnlyQuery(sql);
+				const { display, explanation } = await generateSQL(query, schema);
+				
+				// Execute each SQL query and attach results to its display config
+				const displayWithResults = await Promise.all(
+					display.map(async (config) => {
+						const results = await executeReadOnlyQuery(config.sql);
+						return {
+							...config,
+							results
+						};
+					})
+				);
 
 				return c.json({
 					query,
-					sql,
-					display,
-					results
+					display: displayWithResults,
+					explanation
 				});
 			} catch (error) {
 				console.error('Error processing query:', error);
@@ -70,27 +78,35 @@ export class Api {
 						message: 'Starting query processing' 
 					}));
 
-					const { sql, display } = await generateSQLWithProgress(query, schema, async (progress) => {
+					const { display, explanation } = await generateSQLWithProgress(query, schema, async (progress) => {
 						await stream.writeln(JSON.stringify({ 
 							type: 'progress', 
 							message: progress 
 						}));
 					});
 
-					await stream.writeln(JSON.stringify({ 
-						type: 'progress', 
-						message: 'Executing SQL query' 
-					}));
-
-					const results = await executeReadOnlyQuery(sql);
+					// Execute each SQL query individually and report progress
+					const displayWithResults = [];
+					for (let i = 0; i < display.length; i++) {
+						const config = display[i];
+						await stream.writeln(JSON.stringify({ 
+							type: 'progress', 
+							message: `Executing SQL query ${i+1} of ${display.length}` 
+						}));
+						
+						const results = await executeReadOnlyQuery(config.sql);
+						displayWithResults.push({
+							...config,
+							results
+						});
+					}
 
 					await stream.writeln(JSON.stringify({
 						type: 'result',
 						data: {
 							query,
-							sql,
-							display,
-							results
+							display: displayWithResults,
+							explanation
 						}
 					}));
 				} catch (error) {

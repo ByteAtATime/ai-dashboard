@@ -6,30 +6,21 @@ const DEFAULT_MODEL = 'google/gemini-2.0-flash-exp:free';
 
 export type TableDisplay = {
 	type: 'table';
+	sql: string;
 	columns: Record<string, string>;
 	description?: string;
 };
 
-export type StatsDisplay = {
-	type: 'stats';
-	stats: Array<{
-		id: string;
-		name: string;
-		unit?: string;
-		description?: string;
-	}>;
-	summary?: string;
+export type StatDisplay = {
+	type: 'stat';
+	sql: string;
+	id: string;
+	name: string;
+	unit?: string;
+	description?: string;
 };
 
-export type ChartDisplay = {
-	type: 'barchart' | 'linechart' | 'piechart';
-	xAxis?: string;
-	yAxis?: string;
-	groupBy?: string;
-	title?: string;
-};
-
-export type DisplayConfig = TableDisplay | StatsDisplay | ChartDisplay;
+export type DisplayConfig = TableDisplay | StatDisplay;
 
 type SampleTableToolCall = {
 	id: string;
@@ -186,7 +177,7 @@ function sanitizeToolCallArguments(argsString: string): string {
 export async function generateSQL(
 	query: string,
 	schema: DatabaseSchema
-): Promise<{ sql: string; display: DisplayConfig; explanation?: string }> {
+): Promise<{ display: DisplayConfig[]; explanation?: string }> {
 	return generateSQLWithProgress(query, schema);
 }
 
@@ -194,7 +185,7 @@ export async function generateSQLWithProgress(
 	query: string,
 	schema: DatabaseSchema,
 	progressCallback?: (progress: string) => Promise<void>
-): Promise<{ sql: string; display: DisplayConfig; explanation?: string }> {
+): Promise<{ display: DisplayConfig[]; explanation?: string }> {
 	const schemaDescription = formatSchemaForAI(schema);
 
 	const systemPrompt = `You are an expert SQL engineer that translates natural language queries into PostgreSQL SQL.
@@ -204,49 +195,78 @@ ${schemaDescription}
 
 INSTRUCTIONS:
 1. Carefully analyze the user's query and determine what information is needed
-2. Sample random rows from relevant tables to better understand their structure
-3. Generate optimized PostgreSQL-compatible SQL that answers the query
+2. Important: you must sample random rows from relevant tables to better understand their structure
+3. Generate optimized PostgreSQL-compatible SQL queries for each visualization
 4. Suggest the most appropriate display format for the results
 5. Return ONLY valid JSON with this exact structure:
 {
-  "sql": "The SQL query (without backticks or markdown)",
-  "display": {
-    "type": "table | stats",
-    ...displayConfigFields
-  },
+  "display": [
+    {
+      "type": "table|stat",
+      "sql": "SQL query for this specific visualization",
+      ... other visualization-specific properties
+    },
+    ... more display objects
+  ],
   "explanation": "Brief explanation of the query approach (optional)"
 }
 
-If you need sample data from a specific table to better understand its structure, you can use the sampleTable tool.
+IMPORTANT WORKFLOW REQUIREMENT:
+- You MUST first call the sampleTable function to examine sample data before generating SQL
+- Do not attempt to provide an answer without first sampling data from at least one relevant table
+- This helps you understand the data structure and create a more accurate query
+
+The display MUST be an array of display objects. Each object should be a separate visualization component with its own SQL query.
 
 DISPLAY TYPE DETAILS:
 
-1. For "table":
+1. For a data table:
 {
   "type": "table",
+  "sql": "SQL query that returns data for this table",
   "columns": {
+    // doesn't have to be all columns, just the ones you want to show in this table
     "db_column_name": "User-friendly display name",
     ...
   },
   "description": "Optional context about what this table shows"
 }
 
-2. For "stats":
+2. For individual statistics:
 {
-  "type": "stats",
-  "stats": [
-    {
-      "id": "column_name",
-      "name": "Stat display name",
-      "unit": "Optional unit (%, $, etc.)",
-      "description": "What this stat represents"
-    },
-    ...
-  ],
-  "summary": "Optional overall interpretation"
+  "type": "stat",
+  "sql": "SQL query that returns a single row with this stat",
+  "id": "column_name",
+  "name": "Stat display name",
+  "unit": "Optional unit (%, $, etc.)",
+  "description": "What this stat represents"
 }
 
+You can include multiple visualizations in sequence, each with its own SQL query:
+"display": [
+  { 
+    "type": "stat", 
+    "sql": "SELECT SUM(revenue) AS total_revenue FROM sales",
+    "id": "total_revenue", 
+    "name": "Total Revenue", 
+    "unit": "$" 
+  },
+  { 
+    "type": "table", 
+    "sql": "SELECT customer_name, SUM(amount) AS amount FROM orders GROUP BY customer_name ORDER BY amount DESC LIMIT 10",
+    "columns": { "customer_name": "Customer", "amount": "Amount" } 
+  },
+  { 
+    "type": "stat", 
+    "sql": "SELECT AVG(order_total) AS average_order FROM orders",
+    "id": "average_order", 
+    "name": "Average Order", 
+    "unit": "$" 
+  }
+]
+
 IMPORTANT:
+- Each display object MUST have its own SQL query
 - Always use proper JOINs based on foreign key relationships
 - Consider NULL values and use COALESCE when appropriate
 - Use table aliases for complex queries
@@ -259,7 +279,7 @@ IMPORTANT:
 			type: 'function',
 			function: {
 				name: 'sampleTable',
-				description: 'Get sample rows from a specific table to understand its data structure',
+				description: 'Get sample rows from a specific table to understand its data structure - MUST be called before generating SQL',
 				parameters: {
 					type: 'object',
 					properties: {
@@ -284,7 +304,7 @@ IMPORTANT:
 	];
 
 	try {
-		let finalResponse: { sql: string; display: DisplayConfig; explanation?: string } | null = null;
+		let finalResponse: { display: DisplayConfig[]; explanation?: string } | null = null;
 
 		while (!finalResponse) {
 			if (progressCallback) {
@@ -302,7 +322,12 @@ IMPORTANT:
 					model: env.OPENROUTER_MODEL || DEFAULT_MODEL,
 					messages,
 					tools,
-					tool_choice: 'auto',
+					tool_choice: messages.length <= 2 ? {
+						type: 'function',
+						function: {
+							name: 'sampleTable'
+						}
+					} : 'auto',
 					temperature: 0.1,
 					max_tokens: 1024
 				} as OpenRouterRequest)
@@ -370,12 +395,12 @@ IMPORTANT:
 				const content = message.content.replace(/```json\s*|\s*```/g, '');
 				try {
 					const jsonResponse = JSON.parse(content);
-					if (jsonResponse.sql && jsonResponse.display) {
+					if (jsonResponse.display && Array.isArray(jsonResponse.display)) {
 						if (progressCallback) {
-							await progressCallback('Finalizing SQL query');
+							await progressCallback('Finalizing SQL queries');
 						}
+						
 						finalResponse = {
-							sql: jsonResponse.sql,
 							display: jsonResponse.display,
 							explanation: jsonResponse.explanation
 						};
