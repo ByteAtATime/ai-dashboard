@@ -1,10 +1,12 @@
 import { env } from '$env/dynamic/private';
+import type { DatabaseSchema } from './db';
 
 const DEFAULT_MODEL = 'cognitivecomputations/dolphin3.0-mistral-24b:free';
 
 export type TableDisplay = {
 	type: 'table';
 	columns: Record<string, string>;
+	description?: string;
 };
 
 export type StatsDisplay = {
@@ -13,11 +15,17 @@ export type StatsDisplay = {
 		id: string;
 		name: string;
 		unit?: string;
+		description?: string;
 	}>;
+	summary?: string;
 };
 
 export type ChartDisplay = {
-	type: 'barchart' | 'linechart';
+	type: 'barchart' | 'linechart' | 'piechart';
+	xAxis?: string;
+	yAxis?: string;
+	groupBy?: string;
+	title?: string;
 };
 
 export type DisplayConfig = TableDisplay | StatsDisplay | ChartDisplay;
@@ -48,79 +56,78 @@ type OpenRouterResponse = {
 
 export async function generateSQL(
 	query: string,
-	schema: Record<string, any[]>,
-	sampleData?: Record<string, any[]>
-): Promise<{ sql: string; display: DisplayConfig }> {
-	const schemaDescription = Object.entries(schema)
-		.map(([tableName, columns]) => {
-			const columnDefs = columns.map((col) => `  - ${col.name} (${col.type})`).join('\n');
+	schema: DatabaseSchema
+): Promise<{ sql: string; display: DisplayConfig; explanation?: string }> {
+	const schemaDescription = formatSchemaForAI(schema);
 
-			return `TABLE: ${tableName}\nCOLUMNS:\n${columnDefs}`;
-		})
-		.join('\n\n');
+	const systemPrompt = `You are an expert SQL engineer that translates natural language queries into PostgreSQL SQL.
 
-	let sampleDataDescription = '';
-	if (sampleData && Object.keys(sampleData).length > 0) {
-		sampleDataDescription =
-			'\n\nSAMPLE DATA:\n' +
-			Object.entries(sampleData)
-				.map(([tableName, rows]) => {
-					if (!rows || rows.length === 0) return '';
-
-					return (
-						`TABLE: ${tableName} (${rows.length} sample rows)\n` + JSON.stringify(rows, null, 2)
-					);
-				})
-				.filter(Boolean)
-				.join('\n\n');
-	}
-
-	const systemPrompt = `You are an expert SQL engineer that translates natural language queries into SQL.
-  
 DATABASE SCHEMA:
 ${schemaDescription}
-${sampleDataDescription}
 
 INSTRUCTIONS:
-1. Analyze the user's query carefully
-2. Generate PostgreSQL-compatible SQL that answers the query
-3. Return ONLY valid JSON with this exact structure:
+1. Carefully analyze the user's query and determine what information is needed
+2. Consider the relationships between tables (foreign keys) and data types
+3. Generate optimized PostgreSQL-compatible SQL that answers the query
+4. Suggest the most appropriate display format for the results
+5. Return ONLY valid JSON with this exact structure:
 {
-  "sql": "-- the SQL query without backticks",
+  "sql": "The SQL query (without backticks or markdown)",
   "display": {
-    "type": "table | stats",
-    ... fields based on type as follows:
-  }
+    // Choose ONE of the following display types:
+    // - "table": For tabular data with multiple rows/columns
+    // - "stats": For key metrics that should be highlighted
+    // - "barchart"/"linechart"/"piechart": For visualizations
+    "type": "table | stats | barchart | linechart | piechart",
+    // Additional fields based on display type:
+    ...displayConfigFields
+  },
+  "explanation": "Brief explanation of the query approach (optional)"
 }
 
-For display.type = "table":
+DISPLAY TYPE DETAILS:
+
+1. For "table":
 {
   "type": "table",
   "columns": {
-    "column1": "Display Title 1",
-    "column2": "Display Title 2"
-    
-  }
+    "db_column_name": "User-friendly display name",
+    ...
+  },
+  "description": "Optional context about what this table shows"
 }
 
-For display.type = "stats":
+2. For "stats":
 {
   "type": "stats",
   "stats": [
     {
-      "id": "column_name", 
-      "name": "User-friendly stat name",
-      "unit": "optional unit like '%' or '$'"
+      "id": "column_name",
+      "name": "Stat display name",
+      "unit": "Optional unit (%, $, etc.)",
+      "description": "What this stat represents"
     },
-    
-  ]
+    ...
+  ],
+  "summary": "Optional overall interpretation"
 }
 
-Choose the most appropriate display type:
-- Use "table" for raw data results with multiple rows/columns
-- Use "stats" for a few key metrics that should be highlighted
+3. For charts:
+{
+  "type": "barchart | linechart | piechart",
+  "xAxis": "column_for_x_axis",
+  "yAxis": "column_for_y_axis",
+  "groupBy": "optional_grouping_column",
+  "title": "Chart title"
+}
 
-Output only valid JSON - no explanation text before or after.`;
+IMPORTANT:
+- Always use proper JOINs based on foreign key relationships
+- Consider NULL values and use COALESCE when appropriate
+- Use table aliases for complex queries
+- Include relevant WHERE clauses for filtering
+- Add comments to complex SQL for clarity
+- Output ONLY valid JSON - no explanatory text before or after`;
 
 	try {
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -149,7 +156,6 @@ Output only valid JSON - no explanation text before or after.`;
 		}
 
 		const data = (await response.json()) as OpenRouterResponse;
-
 		if (!data.choices || data.choices.length === 0) {
 			throw new Error('No response from OpenRouter API');
 		}
@@ -158,7 +164,8 @@ Output only valid JSON - no explanation text before or after.`;
 			const jsonResponse = JSON.parse(data.choices[0].message.content);
 			return {
 				sql: jsonResponse.sql,
-				display: jsonResponse.display
+				display: jsonResponse.display,
+				explanation: jsonResponse.explanation
 			};
 		} catch (e) {
 			throw new Error(`Failed to parse AI response as JSON: ${e}`);
@@ -167,4 +174,46 @@ Output only valid JSON - no explanation text before or after.`;
 		console.error('Error calling OpenRouter:', error);
 		throw error;
 	}
+}
+function formatSchemaForAI(schema: DatabaseSchema): string {
+	let output = '';
+
+	if (schema.enums.length > 0) {
+		output += '## Enums (Custom Types)\n';
+		for (const enumDef of schema.enums) {
+			output += `- ${enumDef.name}: ${enumDef.values.join(', ')}\n`;
+		}
+		output += '\n';
+	}
+
+	output += '## Tables\n';
+	for (const table of schema.tables) {
+		output += `### ${table.name} (~${table.rowCount} rows)\n`;
+
+		output += '#### Columns:\n';
+		for (const column of table.columns) {
+			output += `- ${column.name}: ${column.type}`;
+			if (column.udtName && column.udtName !== column.type) output += ` (${column.udtName})`;
+			if (!column.nullable) output += ' NOT NULL';
+			if (column.defaultValue) output += ` DEFAULT ${column.defaultValue}`;
+			if (column.isPrimaryKey) output += ' [PRIMARY KEY]';
+			if (column.isForeignKey)
+				output += ` [FOREIGN KEY → ${column.foreignTable}.${column.foreignColumn}]`;
+			output += '\n';
+		}
+
+		if (table.sampleRows.length > 0) {
+			output += '#### Sample Data:\n';
+			const sample = table.sampleRows.slice(0, 3);
+			const columns = Object.keys(sample[0]);
+			output += `| ${columns.join(' | ')} |\n`;
+			output += `| ${columns.map(() => '---').join(' | ')} |\n`;
+			for (const row of sample) {
+				output += `| ${columns.map((col) => JSON.stringify(row[col])).join(' | ')} |\n`;
+			}
+		}
+		output += '\n';
+	}
+
+	return output;
 }
