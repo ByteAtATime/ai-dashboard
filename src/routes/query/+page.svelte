@@ -1,13 +1,13 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import type { TableDisplay, StatDisplay, DisplayConfig } from '$lib/server/openrouter';
-	
-	import { Button } from "$lib/components/ui/button";
-	import { Textarea } from "$lib/components/ui/textarea";
-	import * as Card from "$lib/components/ui/card";
-	import { Alert } from "$lib/components/ui/alert";
-	import { Separator } from "$lib/components/ui/separator";
-	import { cn } from "$lib/utils";
+
+	import { Button } from '$lib/components/ui/button';
+	import { Textarea } from '$lib/components/ui/textarea';
+	import * as Card from '$lib/components/ui/card';
+	import { Alert } from '$lib/components/ui/alert';
+	import { Separator } from '$lib/components/ui/separator';
+	import { cn } from '$lib/utils';
 
 	let query = $state('');
 	let isLoading = $state(false);
@@ -54,29 +54,29 @@
 
 			while (true) {
 				const { done, value } = await reader.read();
-				
+
 				if (done) {
 					break;
 				}
 
 				buffer += decoder.decode(value, { stream: true });
-				
+
 				const lines = buffer.split('\n');
 				buffer = lines.pop() || '';
-				
+
 				for (const line of lines) {
 					if (!line.trim()) continue;
-					
+
 					try {
 						const data = JSON.parse(line);
-						
+
 						if (data.type === 'progress') {
 							progressMessages = [...progressMessages, data.message];
 							currentStep = data.message;
 						} else if (data.type === 'result') {
 							displayConfigs = data.data.display || [];
 
-							sqls = displayConfigs.map(config => config.sql);
+							sqls = displayConfigs.map((config) => config.sql);
 							currentStep = 'Complete';
 						} else if (data.type === 'error') {
 							error = data.error || 'An unexpected error occurred';
@@ -101,7 +101,7 @@
 		error = '';
 		progressMessages = [];
 	}
-	
+
 	function toggleSql() {
 		showSql = !showSql;
 	}
@@ -110,7 +110,7 @@
 <div class="container mx-auto max-w-6xl px-4 py-8">
 	<header class="mb-6">
 		<h1 class="text-3xl font-bold">Data Explorer</h1>
-		<p class="mt-2 text-lg text-muted-foreground">
+		<p class="text-muted-foreground mt-2 text-lg">
 			Ask questions about your data in plain English and get instant visualizations
 		</p>
 	</header>
@@ -133,21 +133,11 @@
 				<Button type="submit" disabled={isLoading}>
 					{isLoading ? 'Processing...' : 'Run Query'}
 				</Button>
-				<Button
-					type="button"
-					onclick={resetQuery}
-					variant="outline"
-					disabled={isLoading || !query}
-				>
+				<Button type="button" onclick={resetQuery} variant="outline" disabled={isLoading || !query}>
 					Clear
 				</Button>
 				{#if sqls.length > 0}
-					<Button
-						type="button"
-						onclick={toggleSql}
-						variant="secondary"
-						class="ml-auto"
-					>
+					<Button type="button" onclick={toggleSql} variant="secondary" class="ml-auto">
 						{showSql ? 'Hide SQL' : 'Show SQL'}
 					</Button>
 				{/if}
@@ -162,13 +152,15 @@
 	{/if}
 
 	{#if isLoading}
-		<Card.Root class="mb-8 bg-muted/50">
+		<Card.Root class="bg-muted/50 mb-8">
 			<Card.Content class="pt-6">
-				<div class="flex items-center gap-3 mb-4">
-					<div class="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+				<div class="mb-4 flex items-center gap-3">
+					<div
+						class="border-primary h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
+					></div>
 					<span class="font-medium">{currentStep}</span>
 				</div>
-				
+
 				{#each progressMessages as message, i}
 					<div>{message}</div>
 				{/each}
@@ -177,12 +169,12 @@
 	{/if}
 
 	{#if sqls.length > 0 && showSql}
-		<Card.Root class="mb-8 bg-card">
+		<Card.Root class="bg-card mb-8">
 			<Card.Header class="bg-muted/50 py-3">
 				<div class="flex items-center justify-between">
 					<Card.Title class="text-base">Generated SQL</Card.Title>
 					{#if sqls.length > 1}
-						<span class="px-2.5 py-1 rounded-full bg-muted text-xs">{sqls.length} Queries</span>
+						<span class="bg-muted rounded-full px-2.5 py-1 text-xs">{sqls.length} Queries</span>
 					{/if}
 				</div>
 			</Card.Header>
@@ -190,9 +182,10 @@
 				{#each sqls as sql, index}
 					<div class="mb-4 last:mb-0">
 						{#if sqls.length > 1}
-							<p class="mb-1.5 text-xs font-medium text-muted-foreground">Query {index + 1}:</p>
+							<p class="text-muted-foreground mb-1.5 text-xs font-medium">Query {index + 1}:</p>
 						{/if}
-						<pre class="font-mono text-sm whitespace-pre-wrap bg-muted p-3 rounded-md overflow-x-auto">{sql}</pre>
+						<pre
+							class="bg-muted overflow-x-auto rounded-md p-3 font-mono text-sm whitespace-pre-wrap">{sql}</pre>
 					</div>
 				{/each}
 			</Card.Content>
@@ -200,10 +193,10 @@
 	{/if}
 
 	{#if displayConfigs.length > 0}
-		<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+		<div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
 			{#each displayConfigs as config, i}
 				{#if config.type === 'table'}
-					<Card.Root class="lg:col-span-12 overflow-hidden">
+					<Card.Root class="overflow-hidden lg:col-span-12">
 						{#if (config as TableDisplay).description}
 							<Card.Header class="py-3">
 								<Card.Title class="text-base">{(config as TableDisplay).description}</Card.Title>
@@ -215,9 +208,11 @@
 						</div>
 					</Card.Root>
 				{:else if config.type === 'stat'}
-					<Card.Root class="lg:col-span-4 sm:col-span-6 hover:shadow-md transition-all">
+					<Card.Root class="transition-all hover:shadow-md sm:col-span-6 lg:col-span-4">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm font-medium text-muted-foreground">{(config as StatDisplay).name}</Card.Title>
+							<Card.Title class="text-muted-foreground text-sm font-medium"
+								>{(config as StatDisplay).name}</Card.Title
+							>
 						</Card.Header>
 						<Card.Content>
 							<div class="flex items-baseline">
@@ -225,11 +220,15 @@
 									{config.results[0]?.[config.id] ?? 'N/A'}
 								</span>
 								{#if (config as StatDisplay).unit}
-									<span class="ml-1 text-xl text-muted-foreground">{(config as StatDisplay).unit}</span>
+									<span class="text-muted-foreground ml-1 text-xl"
+										>{(config as StatDisplay).unit}</span
+									>
 								{/if}
 							</div>
 							{#if (config as StatDisplay).description}
-								<p class="mt-3 text-sm text-muted-foreground">{(config as StatDisplay).description}</p>
+								<p class="text-muted-foreground mt-3 text-sm">
+									{(config as StatDisplay).description}
+								</p>
 							{/if}
 						</Card.Content>
 					</Card.Root>

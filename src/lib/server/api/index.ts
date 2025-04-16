@@ -17,7 +17,7 @@ export class Api {
 	private setupRoutes() {
 		this.app.get('/', (c) => c.text('API Running'));
 
-		this.app.on(["POST", "GET"], "/auth/**", (c) => auth.handler(c.req.raw));
+		this.app.on(['POST', 'GET'], '/auth/**', (c) => auth.handler(c.req.raw));
 
 		this.app.post('/query', async (c) => {
 			try {
@@ -31,7 +31,7 @@ export class Api {
 				const schema = await getFullSchema();
 
 				const { display, explanation } = await generateSQL(query, schema);
-				
+
 				// Execute each SQL query and attach results to its display config
 				const displayWithResults = await Promise.all(
 					display.map(async (config) => {
@@ -67,36 +67,48 @@ export class Api {
 					const query = body.query;
 
 					if (!query || typeof query !== 'string') {
-						await stream.writeln(JSON.stringify({ 
-							error: 'Query parameter is required', 
-							status: 400 
-						}));
+						await stream.writeln(
+							JSON.stringify({
+								error: 'Query parameter is required',
+								status: 400
+							})
+						);
 						return;
 					}
 
 					const schema = await getFullSchema();
-					
-					await stream.writeln(JSON.stringify({ 
-						type: 'progress', 
-						message: 'Starting query processing' 
-					}));
 
-					const { display, explanation } = await generateSQLWithProgress(query, schema, async (progress) => {
-						await stream.writeln(JSON.stringify({ 
-							type: 'progress', 
-							message: progress 
-						}));
-					});
+					await stream.writeln(
+						JSON.stringify({
+							type: 'progress',
+							message: 'Starting query processing'
+						})
+					);
+
+					const { display, explanation } = await generateSQLWithProgress(
+						query,
+						schema,
+						async (progress) => {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'progress',
+									message: progress
+								})
+							);
+						}
+					);
 
 					// Execute each SQL query individually and report progress
 					const displayWithResults = [];
 					for (let i = 0; i < display.length; i++) {
 						const config = display[i];
-						await stream.writeln(JSON.stringify({ 
-							type: 'progress', 
-							message: `Executing SQL query ${i+1} of ${display.length}` 
-						}));
-						
+						await stream.writeln(
+							JSON.stringify({
+								type: 'progress',
+								message: `Executing SQL query ${i + 1} of ${display.length}`
+							})
+						);
+
 						const results = await executeReadOnlyQuery(config.sql);
 						displayWithResults.push({
 							...config,
@@ -104,21 +116,25 @@ export class Api {
 						});
 					}
 
-					await stream.writeln(JSON.stringify({
-						type: 'result',
-						data: {
-							query,
-							display: displayWithResults,
-							explanation
-						}
-					}));
+					await stream.writeln(
+						JSON.stringify({
+							type: 'result',
+							data: {
+								query,
+								display: displayWithResults,
+								explanation
+							}
+						})
+					);
 				} catch (error) {
 					console.error('Error processing streaming query:', error);
-					await stream.writeln(JSON.stringify({
-						type: 'error',
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
-					}));
+					await stream.writeln(
+						JSON.stringify({
+							type: 'error',
+							error: error instanceof Error ? error.message : 'Unknown error',
+							status: 500
+						})
+					);
 				}
 			});
 		});

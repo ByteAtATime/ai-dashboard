@@ -279,7 +279,8 @@ IMPORTANT:
 			type: 'function',
 			function: {
 				name: 'sampleTable',
-				description: 'Get sample rows from a specific table to understand its data structure - MUST be called before generating SQL',
+				description:
+					'Get sample rows from a specific table to understand its data structure - MUST be called before generating SQL',
 				parameters: {
 					type: 'object',
 					properties: {
@@ -310,7 +311,7 @@ IMPORTANT:
 			if (progressCallback) {
 				await progressCallback('Generating SQL query...');
 			}
-			
+
 			const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 				method: 'POST',
 				headers: {
@@ -322,12 +323,15 @@ IMPORTANT:
 					model: env.OPENROUTER_MODEL || DEFAULT_MODEL,
 					messages,
 					tools,
-					tool_choice: messages.length <= 2 ? {
-						type: 'function',
-						function: {
-							name: 'sampleTable'
-						}
-					} : 'auto',
+					tool_choice:
+						messages.length <= 2
+							? {
+									type: 'function',
+									function: {
+										name: 'sampleTable'
+									}
+								}
+							: 'auto',
 					temperature: 0.1,
 					max_tokens: 1024
 				} as OpenRouterRequest)
@@ -377,7 +381,9 @@ IMPORTANT:
 					let functionResult;
 					if (functionName === 'sampleTable') {
 						if (progressCallback) {
-							await progressCallback(`Sampling ${functionArgs.numRows} rows from \`${functionArgs.tableName}\` table`);
+							await progressCallback(
+								`Sampling ${functionArgs.numRows} rows from \`${functionArgs.tableName}\` table`
+							);
 						}
 						functionResult = await sampleTable(functionArgs.tableName, functionArgs.numRows);
 					} else {
@@ -399,7 +405,7 @@ IMPORTANT:
 						if (progressCallback) {
 							await progressCallback('Finalizing SQL queries');
 						}
-						
+
 						finalResponse = {
 							display: jsonResponse.display,
 							explanation: jsonResponse.explanation
