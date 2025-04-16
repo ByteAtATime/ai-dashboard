@@ -1,15 +1,23 @@
-import { Container, injectable } from '@needle-di/core';
+import { Container, injectable, inject } from '@needle-di/core';
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
-import { generateSQL, generateSQLWithProgress, generateFollowupSQL } from '../openrouter';
-import { executeReadOnlyQuery, getFullSchema } from '../postgres';
+import {
+	SqlGenerationService,
+	type ProgressCallback,
+	type SqlGenerationResult
+} from '../services/sql-generation.service';
+import { PostgresRepository } from '../repositories/postgres.repository';
 import { auth } from '../auth';
+import type { DisplayConfig, QueryContext } from '../types/display.types';
 
 @injectable()
 export class Api {
 	private app: Hono;
 
-	constructor() {
+	constructor(
+		private sqlGenerationService = inject(SqlGenerationService),
+		private postgresRepository = inject(PostgresRepository)
+	) {
 		this.app = new Hono().basePath('/api');
 		this.setupRoutes();
 	}
@@ -28,13 +36,12 @@ export class Api {
 					return c.json({ error: 'Query parameter is required' }, 400);
 				}
 
-				const schema = await getFullSchema();
-
-				const { display, explanation } = await generateSQL(query, schema);
+				const { display, explanation }: SqlGenerationResult =
+					await this.sqlGenerationService.generateSql(query);
 
 				const displayWithResults = await Promise.all(
-					display.map(async (config) => {
-						const results = await executeReadOnlyQuery(config.sql);
+					display.map(async (config: DisplayConfig) => {
+						const results = await this.postgresRepository.executeReadOnlyQuery(config.sql);
 						return {
 							...config,
 							results
@@ -75,8 +82,6 @@ export class Api {
 						return;
 					}
 
-					const schema = await getFullSchema();
-
 					await stream.writeln(
 						JSON.stringify({
 							type: 'progress',
@@ -84,18 +89,17 @@ export class Api {
 						})
 					);
 
-					const { display, explanation } = await generateSQLWithProgress(
-						query,
-						schema,
-						async (progress) => {
-							await stream.writeln(
-								JSON.stringify({
-									type: 'progress',
-									message: progress
-								})
-							);
-						}
-					);
+					const progressCallback: ProgressCallback = async (progress: string) => {
+						await stream.writeln(
+							JSON.stringify({
+								type: 'progress',
+								message: progress
+							})
+						);
+					};
+
+					const { display, explanation }: SqlGenerationResult =
+						await this.sqlGenerationService.generateSql(query, progressCallback);
 
 					const displayWithResults = [];
 					for (let i = 0; i < display.length; i++) {
@@ -107,7 +111,7 @@ export class Api {
 							})
 						);
 
-						const results = await executeReadOnlyQuery(config.sql);
+						const results = await this.postgresRepository.executeReadOnlyQuery(config.sql);
 						displayWithResults.push({
 							...config,
 							results
@@ -141,7 +145,10 @@ export class Api {
 			return streamText(c, async (stream) => {
 				try {
 					const body = await c.req.json();
-					const { followupInstruction, previousContext } = body;
+					const {
+						followupInstruction,
+						previousContext
+					}: { followupInstruction: string; previousContext: QueryContext } = body;
 
 					if (!followupInstruction || typeof followupInstruction !== 'string') {
 						await stream.writeln(
@@ -163,8 +170,6 @@ export class Api {
 						return;
 					}
 
-					const schema = await getFullSchema();
-
 					await stream.writeln(
 						JSON.stringify({
 							type: 'progress',
@@ -172,19 +177,21 @@ export class Api {
 						})
 					);
 
-					const { display, explanation } = await generateFollowupSQL(
-						followupInstruction,
-						previousContext,
-						schema,
-						async (progress) => {
-							await stream.writeln(
-								JSON.stringify({
-									type: 'progress',
-									message: progress
-								})
-							);
-						}
-					);
+					const progressCallback: ProgressCallback = async (progress: string) => {
+						await stream.writeln(
+							JSON.stringify({
+								type: 'progress',
+								message: progress
+							})
+						);
+					};
+
+					const { display, explanation }: SqlGenerationResult =
+						await this.sqlGenerationService.generateFollowupSql(
+							followupInstruction,
+							previousContext,
+							progressCallback
+						);
 
 					const displayWithResults = [];
 					for (let i = 0; i < display.length; i++) {
@@ -196,7 +203,7 @@ export class Api {
 							})
 						);
 
-						const results = await executeReadOnlyQuery(config.sql);
+						const results = await this.postgresRepository.executeReadOnlyQuery(config.sql);
 						displayWithResults.push({
 							...config,
 							results
@@ -233,4 +240,5 @@ export class Api {
 	}
 }
 
-export const routes = new Container().get(Api).routes();
+const container = new Container();
+export const routes = container.get(Api).routes();
