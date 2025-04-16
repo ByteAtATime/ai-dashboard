@@ -6,5 +6,5 @@ export const load: LayoutServerLoad = async ({request}) => {
         headers: request.headers
     });
 
-    return data ?? {};
+    return data ?? { user: null, session: null };
 }

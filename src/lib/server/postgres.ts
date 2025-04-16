@@ -35,7 +35,7 @@ export type DatabaseSchema = {
 };
 
 const pool: Pool = new pg.Pool({
-	connectionString: env.DATABASE_URL,
+	connectionString: env.DATA_DB_URL,
 	ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 	query_timeout: 10000
 });

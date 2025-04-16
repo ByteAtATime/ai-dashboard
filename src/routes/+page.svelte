@@ -1,5 +1,7 @@
 <script lang="ts">
   import { authClient } from '$lib/auth-client';
+  import * as Card from "$lib/components/ui/card";
+  import * as Button from "$lib/components/ui/button";
   
   const { data } = $props();
   const user = $derived(data.user);
@@ -15,27 +17,29 @@
   }
 </script>
 
-<div class="max-w-3xl mx-auto p-8 text-center">
+<div class="container max-w-3xl mx-auto p-8 text-center">
   <h1 class="text-3xl font-bold mb-6">Welcome to the SQL Dashboard</h1>
   
   {#if user}
-    <div class="mt-8 p-4 border border-gray-200 rounded-lg shadow-sm">
-      <p class="mb-4">Signed in as: {user.email}</p>
-      <button 
-        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
-        onclick={signOut}
-      >
-        Sign Out
-      </button>
-    </div>
+    <Card.Card class="mt-8">
+      <Card.CardContent class="pt-6">
+        <p class="mb-4">Signed in as: {user.email}</p>
+        <Button.Button 
+          variant="default"
+          onclick={signOut}
+        >
+          Sign Out
+        </Button.Button>
+      </Card.CardContent>
+    </Card.Card>
   {:else}
     <div class="mt-8">
-      <button 
-        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
+      <Button.Button 
+        variant="default"
         onclick={signInWithGoogle}
       >
         Sign in with Google
-      </button>
+      </Button.Button>
     </div>
   {/if}
 </div>
