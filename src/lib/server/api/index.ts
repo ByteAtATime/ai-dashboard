@@ -1,7 +1,7 @@
 import { Container, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
-import { generateSQL, generateSQLWithProgress } from '../openrouter';
+import { generateSQL, generateSQLWithProgress, generateFollowupSQL } from '../openrouter';
 import { executeReadOnlyQuery, getFullSchema } from '../postgres';
 import { auth } from '../auth';
 
@@ -32,7 +32,6 @@ export class Api {
 
 				const { display, explanation } = await generateSQL(query, schema);
 
-				// Execute each SQL query and attach results to its display config
 				const displayWithResults = await Promise.all(
 					display.map(async (config) => {
 						const results = await executeReadOnlyQuery(config.sql);
@@ -98,7 +97,6 @@ export class Api {
 						}
 					);
 
-					// Execute each SQL query individually and report progress
 					const displayWithResults = [];
 					for (let i = 0; i < display.length; i++) {
 						const config = display[i];
@@ -128,6 +126,96 @@ export class Api {
 					);
 				} catch (error) {
 					console.error('Error processing streaming query:', error);
+					await stream.writeln(
+						JSON.stringify({
+							type: 'error',
+							error: error instanceof Error ? error.message : 'Unknown error',
+							status: 500
+						})
+					);
+				}
+			});
+		});
+
+		this.app.post('/query/followup/stream', async (c) => {
+			return streamText(c, async (stream) => {
+				try {
+					const body = await c.req.json();
+					const { followupInstruction, previousContext } = body;
+
+					if (!followupInstruction || typeof followupInstruction !== 'string') {
+						await stream.writeln(
+							JSON.stringify({
+								error: 'Followup instruction is required',
+								status: 400
+							})
+						);
+						return;
+					}
+
+					if (!previousContext || !previousContext.query || !previousContext.display) {
+						await stream.writeln(
+							JSON.stringify({
+								error: 'Previous query context is required',
+								status: 400
+							})
+						);
+						return;
+					}
+
+					const schema = await getFullSchema();
+
+					await stream.writeln(
+						JSON.stringify({
+							type: 'progress',
+							message: 'Processing followup instruction'
+						})
+					);
+
+					const { display, explanation } = await generateFollowupSQL(
+						followupInstruction,
+						previousContext,
+						schema,
+						async (progress) => {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'progress',
+									message: progress
+								})
+							);
+						}
+					);
+
+					const displayWithResults = [];
+					for (let i = 0; i < display.length; i++) {
+						const config = display[i];
+						await stream.writeln(
+							JSON.stringify({
+								type: 'progress',
+								message: `Executing SQL query ${i + 1} of ${display.length}`
+							})
+						);
+
+						const results = await executeReadOnlyQuery(config.sql);
+						displayWithResults.push({
+							...config,
+							results
+						});
+					}
+
+					await stream.writeln(
+						JSON.stringify({
+							type: 'result',
+							data: {
+								query: followupInstruction,
+								originalQuery: previousContext.query,
+								display: displayWithResults,
+								explanation
+							}
+						})
+					);
+				} catch (error) {
+					console.error('Error processing streaming followup query:', error);
 					await stream.writeln(
 						JSON.stringify({
 							type: 'error',

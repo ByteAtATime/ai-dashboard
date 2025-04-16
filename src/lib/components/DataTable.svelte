@@ -4,17 +4,14 @@
 		columns = {}
 	}: {
 		data: Record<string, any>[];
-		columns?: Record<string, string>; // mapping of column names to display titles
+		columns?: Record<string, string>;
 	} = $props();
 
-	// Derive the columns from the data if not provided
 	let displayColumns = $derived.by(() => {
-		// If columns mapping is provided, use those
 		if (Object.keys(columns).length > 0) {
 			return Object.keys(columns);
 		}
 
-		// Otherwise, detect columns from data
 		if (data.length === 0) return [];
 		const allKeys = new Set<string>();
 		data.forEach((row) => {
@@ -23,12 +20,10 @@
 		return Array.from(allKeys);
 	});
 
-	// Function to get display title for a column
 	function getColumnTitle(colKey: string): string {
 		if (columns && columns[colKey]) {
 			return columns[colKey];
 		}
-		// If no mapping provided, use the column key with basic formatting
 		return colKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 	}
 </script>
