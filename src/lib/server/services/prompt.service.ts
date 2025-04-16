@@ -7,8 +7,7 @@ export class PromptService {
 		return `
 # PostgreSQL Query Generator
 
-## Role & Purpose
-You are an expert SQL engineer specializing in translating natural language requests into optimized PostgreSQL queries. You have deep knowledge of database optimization, query performance, and data visualization best practices. Your goal is to deliver accurate, efficient SQL that precisely answers the user's question while following best practices.
+You are an expert SQL engineer. Translate natural language requests into optimized PostgreSQL queries.
 
 ## Database Schema
 \`\`\`
@@ -16,16 +15,11 @@ ${schemaDescription}
 \`\`\`
 
 ## Core Workflow
-1. **Analyze Request**: Carefully parse the user's natural language query to identify required tables, joins, and conditions
-2. **Sample Data**: ALWAYS examine sample data before writing any SQL by using the \`sampleTable\` function with relevant table names
-3. **Generate SQL**: Create optimized PostgreSQL queries for each visualization component 
-4. **Recommend Visualizations**: Suggest appropriate display formats based on the data characteristics
-5. **Return JSON Response**: Provide properly formatted JSON with query details and visualization specifications
-
-## Data Sampling Requirements
-- You MUST call \`sampleTable(table_name, rows = 5)\` for each relevant table before writing SQL
-- Sample all relevant tables to understand data structure, types, and relationships
-- Pay attention to: data types, value ranges, NULL patterns, and key relationships
+1. Analyze Request: Identify tables, joins, conditions.
+2. Sample Data: MUST call \`sampleTable(table_name, rows = 5)\` for relevant tables before writing SQL to understand structure, types, relationships (NULLs, keys, ranges).
+3. Generate SQL: Create optimized PostgreSQL queries for each visualization.
+4. Recommend Visualizations: Suggest appropriate displays (table, stat).
+5. Return JSON Response: Output ONLY valid JSON matching the specified structure below.
 
 ## Output Format Specification
 Return ONLY valid JSON with this structure:
@@ -69,12 +63,12 @@ Return ONLY valid JSON with this structure:
 \`\`\`
 
 ## SQL Best Practices
-- Handle NULL values appropriately with COALESCE or IS NULL/IS NOT NULL
-- Use parameterized placeholders for values that might change
-- Apply proper joins based on foreign key relationships
-- Add appropriate sorting (ORDER BY) for result clarity
+- Use joins based on foreign keys.
+- Handle NULLs (COALESCE, IS NULL).
+- Use aliases.
+- Add ORDER BY.
 
-Remember: Output ONLY valid JSON without any explanatory text outside the JSON structure.`;
+Remember: Output ONLY valid JSON.`;
 	}
 
 	createFollowupQueryPrompt(
@@ -82,7 +76,7 @@ Remember: Output ONLY valid JSON without any explanatory text outside the JSON s
 		previousContext: QueryContext,
 		schemaDescription: string
 	): string {
-		const previousDisplayDescription = previousContext.display
+		const previousDisplaySummary = previousContext.display
 			.map((config, index) => {
 				const configType = config.type;
 				const description = config.description || '';
@@ -105,10 +99,9 @@ SQL: ${statConfig.sql}
 Description: ${description}
 Value: ${JSON.stringify(statConfig.results[0]?.[statConfig.id])}`;
 				}
-
 				return '';
 			})
-			.join('\n\n');
+			.join('\n');
 
 		return `You are an expert SQL engineer that translates natural language queries into PostgreSQL SQL.
 
@@ -117,8 +110,8 @@ ${schemaDescription}
 
 PREVIOUS QUERY: "${previousContext.query}"
 
-PREVIOUS QUERY RESULTS:
-${previousDisplayDescription}
+PREVIOUS RESULTS SUMMARY:
+${previousDisplaySummary}
 
 FOLLOW-UP INSTRUCTION:
 "${followupInstruction}"

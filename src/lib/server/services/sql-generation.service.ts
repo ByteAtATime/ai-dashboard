@@ -151,12 +151,14 @@ export class SqlGenerationService {
 					await progressCallback('Processing follow-up instruction...');
 				}
 
+				const model = this.openRouterService.model;
 				const request: OpenRouterRequest = {
 					messages,
 					tools,
 					tool_choice: 'auto',
 					temperature: 0.1,
-					max_tokens: 1024
+					max_tokens: 1024,
+					model
 				};
 
 				const data = await this.openRouterService.chatCompletion(request);

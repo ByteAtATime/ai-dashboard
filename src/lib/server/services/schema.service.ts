@@ -15,7 +15,7 @@ export class SchemaService {
 		let output = '';
 
 		if (schema.enums.length > 0) {
-			output += '## Enums (Custom Types)\n';
+			output += '## Enums\n';
 			for (const enumDef of schema.enums) {
 				output += `- ${enumDef.name}: ${enumDef.values.join(', ')}\n`;
 			}
@@ -26,20 +26,19 @@ export class SchemaService {
 		for (const table of schema.tables) {
 			output += `### ${table.name} (${table.rowCount} rows)\n`;
 
-			output += '#### Columns:\n';
+			output += 'Columns:\n';
 			for (const column of table.columns) {
-				output += `- ${column.name}: ${column.type}`;
-				if (column.udtName && column.udtName !== column.type) output += ` (${column.udtName})`;
-				if (!column.nullable) output += ' NOT NULL';
-				if (column.defaultValue) output += ` DEFAULT ${column.defaultValue}`;
-				if (column.isPrimaryKey) output += ' [PRIMARY KEY]';
-				if (column.isForeignKey)
-					output += ` [FOREIGN KEY → ${column.foreignTable}.${column.foreignColumn}]`;
-				output += '\n';
+				let columnInfo = `- ${column.name}: ${column.type}`;
+				if (!column.nullable) columnInfo += ' NOT NULL';
+				if (column.isPrimaryKey) columnInfo += ' [PK]';
+				if (column.isForeignKey) {
+					columnInfo += ` [FK -> ${column.foreignTable}.${column.foreignColumn}]`;
+				}
+				output += columnInfo + '\n';
 			}
 			output += '\n';
 		}
 
-		return output;
+		return output.trim();
 	}
 }
