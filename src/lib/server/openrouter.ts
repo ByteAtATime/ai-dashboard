@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
-import type { DatabaseSchema } from './db';
-import pool from './db';
+import type { DatabaseSchema } from './postgres';
+import pool from './postgres';
 
 const DEFAULT_MODEL = 'google/gemini-2.0-flash-exp:free';
 

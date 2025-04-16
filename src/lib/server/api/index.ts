@@ -2,7 +2,8 @@ import { Container, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
 import { generateSQL, generateSQLWithProgress } from '../openrouter';
-import { executeReadOnlyQuery, getFullSchema } from '../db';
+import { executeReadOnlyQuery, getFullSchema } from '../postgres';
+import { auth } from '../auth';
 
 @injectable()
 export class Api {
@@ -15,6 +16,8 @@ export class Api {
 
 	private setupRoutes() {
 		this.app.get('/', (c) => c.text('API Running'));
+
+		this.app.on(["POST", "GET"], "/auth/**", (c) => auth.handler(c.req.raw));
 
 		this.app.post('/query', async (c) => {
 			try {
