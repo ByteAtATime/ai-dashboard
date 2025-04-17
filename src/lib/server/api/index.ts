@@ -39,12 +39,4 @@ export class Api implements IApi {
 	}
 }
 
-// Setup the dependency injection container
-const container = new Container();
-
-// Register services
-container.register('IRepository', { useClass: PostgresRepository });
-container.register('ISqlGenerationService', { useClass: SqlGenerationService });
-
-// Export the routes for use in the app
-export const routes = container.get(Api).routes();
+export const routes = new Container().get(Api).routes();
