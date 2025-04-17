@@ -13,6 +13,7 @@
 	import { Alert } from '$lib/components/ui/alert';
 	import { Separator } from '$lib/components/ui/separator';
 	import { cn } from '$lib/utils';
+	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
 
 	let query = $state('');
 	let followupInstruction = $state('');
@@ -245,18 +246,16 @@
 					<Button type="submit" disabled={isLoading}>
 						{isLoading ? 'Processing...' : 'Run Query'}
 					</Button>
-					<Button
-						type="button"
-						onclick={resetQuery}
-						variant="outline"
-						disabled={isLoading || !query}
-					>
-						Clear
-					</Button>
-					{#if sqls.length > 0}
-						<Button type="button" onclick={toggleSql} variant="secondary" class="ml-auto">
+					<Button type="button" onclick={resetQuery} variant="outline">Reset</Button>
+					{#if displayConfigs.length > 0}
+						<Button type="button" onclick={toggleSql} variant="outline">
 							{showSql ? 'Hide SQL' : 'Show SQL'}
 						</Button>
+						<SaveDashboard
+							{query}
+							display={displayConfigs}
+							explanation={previousContext?.explanation || ''}
+						/>
 					{/if}
 				</div>
 			</form>
@@ -297,6 +296,11 @@
 							<Button type="button" onclick={toggleSql} variant="secondary" class="ml-auto">
 								{showSql ? 'Hide SQL' : 'Show SQL'}
 							</Button>
+							<SaveDashboard
+								{query}
+								display={displayConfigs}
+								explanation={previousContext?.explanation || ''}
+							/>
 						{/if}
 					</div>
 				</form>

@@ -5,42 +5,33 @@ import { ToolService, type HandleToolCallResult } from './tool.service';
 import { PromptService } from './prompt.service';
 import type { DisplayConfig, QueryContext } from '../types/display.types';
 import type { Message, OpenRouterRequest } from '../types/openrouter.types';
-import {
-	type ISqlGenerationService,
-	type SqlGenerationResult,
-	type ProgressCallback
-} from '../interfaces/sql-generation.interface';
-import { FollowupSqlGenerationService } from './followup-sql-generation.service';
+import type { SqlGenerationResult, ProgressCallback } from '../interfaces/sql-generation.interface';
 
 @injectable()
-export class SqlGenerationService implements ISqlGenerationService {
-	private followupService: FollowupSqlGenerationService;
-
+export class FollowupSqlGenerationService {
 	constructor(
-		private schemaService = inject(SchemaService),
-		private openRouterService = inject(OpenRouterService),
-		private toolService = inject(ToolService),
-		private promptService = inject(PromptService)
-	) {
-		this.followupService = new FollowupSqlGenerationService(
-			schemaService,
-			openRouterService,
-			toolService,
-			promptService
-		);
-	}
+		private schemaService: SchemaService,
+		private openRouterService: OpenRouterService,
+		private toolService: ToolService,
+		private promptService: PromptService
+	) {}
 
-	async generateSql(
-		query: string,
+	async generateFollowupSql(
+		followupInstruction: string,
+		previousContext: QueryContext,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult> {
 		const schemaDescription = await this.schemaService.getFormattedSchemaForAI();
-		const systemPrompt = this.promptService.createInitialQueryPrompt(schemaDescription);
+		const systemPrompt = this.promptService.createFollowupQueryPrompt(
+			followupInstruction,
+			previousContext,
+			schemaDescription
+		);
 		const tools = this.toolService.getToolDefinitions();
 
 		const messages: Message[] = [
 			{ role: 'system', content: systemPrompt },
-			{ role: 'user', content: query }
+			{ role: 'user', content: followupInstruction }
 		];
 
 		try {
@@ -48,21 +39,14 @@ export class SqlGenerationService implements ISqlGenerationService {
 
 			while (!finalResponse) {
 				if (progressCallback) {
-					await progressCallback('Generating SQL query...');
+					await progressCallback('Processing follow-up instruction...');
 				}
 
-				// force tool call on the first turn for initial query so it samples data
-				const toolChoice =
-					messages.length <= 2
-						? { type: 'function' as const, function: { name: 'sampleTable' } }
-						: 'auto';
-
 				const model = this.openRouterService.model;
-
 				const request: OpenRouterRequest = {
 					messages,
 					tools,
-					tool_choice: toolChoice,
+					tool_choice: 'auto',
 					temperature: 0.1,
 					max_tokens: 1024,
 					model
@@ -83,28 +67,13 @@ export class SqlGenerationService implements ISqlGenerationService {
 
 			return finalResponse;
 		} catch (error) {
-			console.error('Error generating SQL:', error);
+			console.error('Error generating follow-up SQL:', error);
 			throw error;
 		}
 	}
 
-	async generateFollowupSql(
-		followupInstruction: string,
-		previousContext: QueryContext,
-		progressCallback?: ProgressCallback
-	): Promise<SqlGenerationResult> {
-		return this.followupService.generateFollowupSql(
-			followupInstruction,
-			previousContext,
-			progressCallback
-		);
-	}
-
 	private async processAssistantResponse(
-		message: {
-			content: string | null;
-			tool_calls?: any[];
-		},
+		message: any,
 		messages: Message[],
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult | null> {
@@ -138,7 +107,7 @@ export class SqlGenerationService implements ISqlGenerationService {
 			const jsonResponse = JSON.parse(cleanContent);
 			if (jsonResponse.display && Array.isArray(jsonResponse.display)) {
 				if (progressCallback) {
-					await progressCallback('Finalizing SQL queries');
+					await progressCallback('Finalizing SQL queries for follow-up');
 				}
 				return {
 					display: jsonResponse.display as DisplayConfig[],

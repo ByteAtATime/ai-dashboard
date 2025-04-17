@@ -1,11 +1,12 @@
 import { env } from '$env/dynamic/private';
 import { injectable } from '@needle-di/core';
 import type { OpenRouterRequest, OpenRouterResponse } from '../types/openrouter.types';
+import type { IOpenRouterService } from '../interfaces/openrouter.interface';
 
-const DEFAULT_MODEL = 'anthropic/claude-3.5-haiku';
+const DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
 
 @injectable()
-export class OpenRouterService {
+export class OpenRouterService implements IOpenRouterService {
 	public readonly model = env.OPENROUTER_MODEL || DEFAULT_MODEL;
 
 	async chatCompletion(request: OpenRouterRequest): Promise<OpenRouterResponse> {

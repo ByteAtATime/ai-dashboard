@@ -54,3 +54,16 @@ export const flyAndScale = (
 		easing: cubicOut
 	};
 };
+
+/**
+ * Format a date using Intl.DateTimeFormat
+ */
+export function formatDate(date: Date | string | number): string {
+	return new Intl.DateTimeFormat('en-US', {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	}).format(typeof date === 'string' || typeof date === 'number' ? new Date(date) : date);
+}

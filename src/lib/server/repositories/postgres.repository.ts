@@ -8,9 +8,10 @@ import type {
 	DatabaseColumn,
 	DatabaseEnum
 } from '../types/db.types';
+import { type IRepository } from '../interfaces/repository.interface';
 
 @injectable()
-export class PostgresRepository {
+export class PostgresRepository implements IRepository {
 	private pool: Pool;
 	private schemaCache: DatabaseSchema | null = null;
 	private readonly CACHE_TTL_MS = 3600000; // 1 hour
