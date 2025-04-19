@@ -1,10 +1,11 @@
 import { inject, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
-import type { SqlGenerationResult, ProgressCallback } from '../interfaces/sql-generation.interface';
+import type { ProgressCallback } from '../interfaces/sql-generation.interface';
 import type { DisplayConfig, QueryContext } from '../types/display.types';
 import { SqlGenerationService } from '../services/sql-generation.service';
 import { PostgresRepository } from '../repositories/postgres.repository';
+import { DataSourceService } from '../services/datasource.service';
 
 @injectable()
 export class QueryRoutes {
@@ -12,10 +13,25 @@ export class QueryRoutes {
 
 	constructor(
 		private sqlGenerationService = inject(SqlGenerationService),
-		private repository = inject(PostgresRepository)
+		private repository = inject(PostgresRepository),
+		private dataSourceService = inject(DataSourceService)
 	) {
 		this.app = new Hono();
 		this.setupRoutes();
+	}
+
+	private async getUserIdFromRequest(request: Request): Promise<string | null> {
+		try {
+			const { auth } = await import('../auth');
+			const sessionResult = await auth.api.getSession({ headers: request.headers });
+			if (sessionResult && sessionResult.user && sessionResult.user.id) {
+				return sessionResult.user.id;
+			}
+			return null;
+		} catch (error) {
+			console.error('Error getting user session:', error);
+			return null;
+		}
 	}
 
 	private setupRoutes() {
@@ -23,16 +39,34 @@ export class QueryRoutes {
 			try {
 				const body = await c.req.json();
 				const query = body.query as string;
+				const dataSourceId = body.dataSourceId as string;
 
 				if (!query || typeof query !== 'string') {
 					return c.json({ error: 'Query parameter is required' }, 400);
+				}
+
+				let connectionString = '';
+				if (dataSourceId) {
+					const userId = await this.getUserIdFromRequest(c.req.raw);
+					if (!userId) {
+						return c.json({ error: 'Unauthorized' }, 401);
+					}
+					const dataSource = await this.dataSourceService.getById(dataSourceId, userId);
+					if (!dataSource) {
+						return c.json({ error: 'Data source not found' }, 404);
+					}
+					connectionString = dataSource.connectionString;
 				}
 
 				const { display, explanation } = await this.sqlGenerationService.generateSql(query);
 
 				const displayWithResults = await Promise.all(
 					display.map(async (config: DisplayConfig) => {
-						const results = await this.repository.executeReadOnlyQuery(config.sql);
+						const results = await this.repository.executeReadOnlyQuery(
+							config.sql,
+							[],
+							connectionString
+						);
 						return {
 							...config,
 							results
@@ -62,6 +96,7 @@ export class QueryRoutes {
 				try {
 					const body = await c.req.json();
 					const query = body.query as string;
+					const dataSourceId = body.dataSourceId as string;
 
 					if (!query || typeof query !== 'string') {
 						await stream.writeln(
@@ -71,6 +106,33 @@ export class QueryRoutes {
 							})
 						);
 						return;
+					}
+
+					let connectionString = '';
+					if (dataSourceId) {
+						const userId = await this.getUserIdFromRequest(c.req.raw);
+						if (!userId) {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'error',
+									error: 'Unauthorized',
+									status: 401
+								})
+							);
+							return;
+						}
+						const dataSource = await this.dataSourceService.getById(dataSourceId, userId);
+						if (!dataSource) {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'error',
+									error: 'Data source not found',
+									status: 404
+								})
+							);
+							return;
+						}
+						connectionString = dataSource.connectionString;
 					}
 
 					await stream.writeln(
@@ -104,7 +166,11 @@ export class QueryRoutes {
 							})
 						);
 
-						const results = await this.repository.executeReadOnlyQuery(config.sql);
+						const results = await this.repository.executeReadOnlyQuery(
+							config.sql,
+							[],
+							connectionString
+						);
 						displayWithResults.push({
 							...config,
 							results
@@ -141,9 +207,10 @@ export class QueryRoutes {
 					const bodyData = body as {
 						followupInstruction: string;
 						previousContext: QueryContext;
+						dataSourceId: string;
 					};
 
-					const { followupInstruction, previousContext } = bodyData;
+					const { followupInstruction, previousContext, dataSourceId } = bodyData;
 
 					if (!followupInstruction || typeof followupInstruction !== 'string') {
 						await stream.writeln(
@@ -163,6 +230,33 @@ export class QueryRoutes {
 							})
 						);
 						return;
+					}
+
+					let connectionString = '';
+					if (dataSourceId) {
+						const userId = await this.getUserIdFromRequest(c.req.raw);
+						if (!userId) {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'error',
+									error: 'Unauthorized',
+									status: 401
+								})
+							);
+							return;
+						}
+						const dataSource = await this.dataSourceService.getById(dataSourceId, userId);
+						if (!dataSource) {
+							await stream.writeln(
+								JSON.stringify({
+									type: 'error',
+									error: 'Data source not found',
+									status: 404
+								})
+							);
+							return;
+						}
+						connectionString = dataSource.connectionString;
 					}
 
 					await stream.writeln(
@@ -197,7 +291,11 @@ export class QueryRoutes {
 							})
 						);
 
-						const results = await this.repository.executeReadOnlyQuery(config.sql);
+						const results = await this.repository.executeReadOnlyQuery(
+							config.sql,
+							[],
+							connectionString
+						);
 						displayWithResults.push({
 							...config,
 							results

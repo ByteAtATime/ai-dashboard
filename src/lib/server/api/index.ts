@@ -4,12 +4,7 @@ import { auth } from '../auth';
 import { type IApi } from '../interfaces/api.interface';
 import { DashboardRoutes } from './dashboard.routes';
 import { QueryRoutes } from './query.routes';
-import { PostgresRepository } from '../repositories/postgres.repository';
-import { SqlGenerationService } from '../services/sql-generation.service';
-import { OpenRouterService } from '../services/openrouter.service';
-import { SchemaService } from '../services/schema.service';
-import { ToolService } from '../services/tool.service';
-import { PromptService } from '../services/prompt.service';
+import { DataSourceRoutes } from './datasource.routes';
 
 @injectable()
 export class Api implements IApi {
@@ -17,7 +12,8 @@ export class Api implements IApi {
 
 	constructor(
 		private dashboardRoutes = inject(DashboardRoutes),
-		private queryRoutes = inject(QueryRoutes)
+		private queryRoutes = inject(QueryRoutes),
+		private dataSourceRoutes = inject(DataSourceRoutes)
 	) {
 		this.app = new Hono().basePath('/api');
 		this.setupRoutes();
@@ -32,6 +28,9 @@ export class Api implements IApi {
 
 		// Mount query routes
 		this.app.route('/query', this.queryRoutes.routes());
+
+		// Mount data source routes
+		this.app.route('/datasources', this.dataSourceRoutes.routes());
 	}
 
 	public routes() {

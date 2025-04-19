@@ -14,6 +14,19 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { cn } from '$lib/utils';
 	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
+	import { onMount } from 'svelte';
+
+	type DataSource = {
+		id: string;
+		name: string;
+		connectionString: string;
+		isDefault: boolean;
+	};
+
+	let dataSources = $state<DataSource[]>([]);
+	let selectedDataSourceId = $state('');
+	let dataSourcesLoading = $state(false);
+	let dataSourcesError = $state('');
 
 	let query = $state('');
 	let followupInstruction = $state('');
@@ -28,9 +41,34 @@
 	let previousContext = $state<QueryContext | null>(null);
 	let originalQuery = $state('');
 
+	onMount(async () => {
+		try {
+			dataSourcesLoading = true;
+			const response = await fetch('/api/datasources');
+			if (!response.ok) throw new Error('Failed to fetch data sources');
+
+			dataSources = await response.json();
+
+			if (dataSources.length > 0) {
+				const defaultSource = dataSources.find((ds) => ds.isDefault) || dataSources[0];
+				selectedDataSourceId = defaultSource.id;
+			}
+		} catch (err) {
+			dataSourcesError = err instanceof Error ? err.message : 'Failed to load data sources';
+			console.error('Error loading data sources:', err);
+		} finally {
+			dataSourcesLoading = false;
+		}
+	});
+
 	async function submitQuery() {
 		if (!query.trim()) {
 			error = 'Please enter a query';
+			return;
+		}
+
+		if (!selectedDataSourceId && dataSources.length > 0) {
+			error = 'Please select a data source';
 			return;
 		}
 
@@ -51,7 +89,10 @@
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ query })
+				body: JSON.stringify({
+					query,
+					dataSourceId: selectedDataSourceId
+				})
 			});
 
 			if (!response.ok) {
@@ -96,7 +137,8 @@
 							previousContext = {
 								query: query,
 								display: displayConfigs,
-								explanation: data.data.explanation
+								explanation: data.data.explanation,
+								dataSourceId: selectedDataSourceId
 							};
 
 							showFollowup = true;
@@ -137,7 +179,8 @@
 				},
 				body: JSON.stringify({
 					followupInstruction,
-					previousContext
+					previousContext,
+					dataSourceId: previousContext.dataSourceId || selectedDataSourceId
 				})
 			});
 
@@ -182,7 +225,8 @@
 							previousContext = {
 								query: followupInstruction,
 								display: displayConfigs,
-								explanation: data.data.explanation
+								explanation: data.data.explanation,
+								dataSourceId: previousContext.dataSourceId || selectedDataSourceId
 							};
 
 							followupInstruction = '';
@@ -236,6 +280,36 @@
 				}}
 				class="space-y-4"
 			>
+				<!-- Data Source Selector -->
+				{#if dataSourcesLoading}
+					<div class="text-muted-foreground text-sm">Loading data sources...</div>
+				{:else if dataSourcesError}
+					<Alert variant="destructive" class="mb-2">
+						<span>Error loading data sources: {dataSourcesError}</span>
+					</Alert>
+				{:else if dataSources.length === 0}
+					<Alert variant="destructive" class="mb-2">
+						<span
+							>No data sources available. <a href="/datasources" class="underline"
+								>Add a data source</a
+							> to continue.</span
+						>
+					</Alert>
+				{:else}
+					<div class="grid gap-2">
+						<label for="dataSource" class="text-sm font-medium">Data Source</label>
+						<select
+							id="dataSource"
+							bind:value={selectedDataSourceId}
+							class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							{#each dataSources as ds}
+								<option value={ds.id}>{ds.name}{ds.isDefault ? ' (Default)' : ''}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+
 				<Textarea
 					bind:value={query}
 					placeholder="Ask a question about your data (e.g., 'Show me the top 5 customers by revenue and their total order count')"
@@ -243,7 +317,7 @@
 					class="w-full"
 				/>
 				<div class="flex flex-wrap gap-3">
-					<Button type="submit" disabled={isLoading}>
+					<Button type="submit" disabled={isLoading || dataSources.length === 0}>
 						{isLoading ? 'Processing...' : 'Run Query'}
 					</Button>
 					<Button type="button" onclick={resetQuery} variant="outline">Reset</Button>
@@ -257,11 +331,28 @@
 							explanation={previousContext?.explanation || ''}
 						/>
 					{/if}
+
+					<a
+						href="/datasources"
+						class="ml-auto flex items-center text-sm text-blue-600 hover:underline"
+					>
+						Manage Data Sources
+					</a>
 				</div>
 			</form>
 		{:else}
 			<!-- Follow-up query form -->
 			<div class="space-y-3">
+				<!-- Data source display -->
+				{#if dataSources.length > 0 && selectedDataSourceId}
+					<div class="text-muted-foreground mb-2 text-sm">
+						<span class="font-medium">Data Source:</span>
+						{dataSources.find(
+							(ds) => ds.id === (previousContext?.dataSourceId || selectedDataSourceId)
+						)?.name || 'Unknown'}
+					</div>
+				{/if}
+
 				{#if originalQuery}
 					<div class="text-muted-foreground text-sm">
 						<span class="font-medium">Original query:</span>

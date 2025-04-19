@@ -2,12 +2,7 @@ import { env } from '$env/dynamic/private';
 import pg from 'pg';
 import type { Pool, PoolClient } from 'pg';
 import { injectable } from '@needle-di/core';
-import type {
-	DatabaseSchema,
-	DatabaseTable,
-	DatabaseColumn,
-	DatabaseEnum
-} from '../types/db.types';
+import type { DatabaseSchema, DatabaseTable, DatabaseEnum } from '../types/db.types';
 import { type IRepository } from '../interfaces/repository.interface';
 
 @injectable()
@@ -15,6 +10,7 @@ export class PostgresRepository implements IRepository {
 	private pool: Pool;
 	private schemaCache: DatabaseSchema | null = null;
 	private readonly CACHE_TTL_MS = 3600000; // 1 hour
+	private pools: Map<string, Pool> = new Map();
 
 	constructor() {
 		this.pool = new pg.Pool({
@@ -22,6 +18,25 @@ export class PostgresRepository implements IRepository {
 			ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 			query_timeout: 10000
 		});
+	}
+
+	private getPool(connectionString?: string): Pool {
+		if (!connectionString) {
+			return this.pool;
+		}
+
+		if (this.pools.has(connectionString)) {
+			return this.pools.get(connectionString)!;
+		}
+
+		const newPool = new pg.Pool({
+			connectionString,
+			ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+			query_timeout: 10000
+		});
+
+		this.pools.set(connectionString, newPool);
+		return newPool;
 	}
 
 	async getFullSchema(): Promise<DatabaseSchema> {
@@ -50,9 +65,13 @@ export class PostgresRepository implements IRepository {
 
 	async executeReadOnlyQuery(
 		sql: string,
-		params: unknown[] = []
+		params: unknown[] = [],
+		connectionString?: string
 	): Promise<Record<string, unknown>[]> {
-		const client = await this.pool.connect();
+		// Get the appropriate connection pool
+		const pool = this.getPool(connectionString);
+		const client = await pool.connect();
+
 		try {
 			await client.query('SET TRANSACTION READ ONLY');
 			await client.query('SET statement_timeout = 5000');
