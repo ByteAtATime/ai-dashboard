@@ -8,10 +8,15 @@ export type SqlGenerationResult = {
 export type ProgressCallback = (message: string) => Promise<void>;
 
 export interface ISqlGenerationService {
-	generateSql(query: string, progressCallback?: ProgressCallback): Promise<SqlGenerationResult>;
+	generateSql(
+		query: string,
+		connectionString: string,
+		progressCallback?: ProgressCallback
+	): Promise<SqlGenerationResult>;
 	generateFollowupSql(
 		followupInstruction: string,
 		previousContext: QueryContext,
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult>;
 }

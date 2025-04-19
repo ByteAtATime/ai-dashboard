@@ -4,11 +4,15 @@ import type { DataSource } from '../types/datasource.types';
 export interface IRepository {
 	executeReadOnlyQuery(
 		sql: string,
-		params?: unknown[],
-		connectionString?: string
+		connectionString: string,
+		params?: unknown[]
 	): Promise<Record<string, unknown>[]>;
-	sampleTable(tableName: string, numRows: number): Promise<Record<string, unknown>[]>;
-	getFullSchema(): Promise<DatabaseSchema>;
+	sampleTable(
+		tableName: string,
+		numRows: number,
+		connectionString: string
+	): Promise<Record<string, unknown>[]>;
+	getFullSchema(connectionString: string): Promise<DatabaseSchema>;
 }
 
 export interface IDataSourceRepository {

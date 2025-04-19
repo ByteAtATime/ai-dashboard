@@ -41,6 +41,7 @@ export class ToolService {
 
 	async handleToolCall(
 		toolCall: AIToolCall,
+		connectionString: string,
 		progressCallback?: (message: string) => Promise<void>
 	): Promise<HandleToolCallResult> {
 		const functionName = toolCall.function.name;
@@ -67,7 +68,8 @@ export class ToolService {
 			}
 			functionResult = await this.postgresRepository.sampleTable(
 				functionArgs.tableName,
-				functionArgs.numRows
+				functionArgs.numRows,
+				connectionString
 			);
 		} else {
 			console.error(`Unknown function called: ${functionName}`);

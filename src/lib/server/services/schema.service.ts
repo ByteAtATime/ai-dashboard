@@ -6,8 +6,8 @@ import type { DatabaseSchema } from '../types/db.types';
 export class SchemaService {
 	constructor(private postgresRepository = inject(PostgresRepository)) {}
 
-	async getFormattedSchemaForAI(): Promise<string> {
-		const schema = await this.postgresRepository.getFullSchema();
+	async getFormattedSchemaForAI(connectionString: string): Promise<string> {
+		const schema = await this.postgresRepository.getFullSchema(connectionString);
 		return this.formatSchemaForAI(schema);
 	}
 

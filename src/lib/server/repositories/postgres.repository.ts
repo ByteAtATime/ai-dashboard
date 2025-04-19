@@ -7,24 +7,11 @@ import { type IRepository } from '../interfaces/repository.interface';
 
 @injectable()
 export class PostgresRepository implements IRepository {
-	private pool: Pool;
 	private schemaCache: DatabaseSchema | null = null;
 	private readonly CACHE_TTL_MS = 3600000; // 1 hour
 	private pools: Map<string, Pool> = new Map();
 
-	constructor() {
-		this.pool = new pg.Pool({
-			connectionString: env.DATA_DB_URL,
-			ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-			query_timeout: 10000
-		});
-	}
-
-	private getPool(connectionString?: string): Pool {
-		if (!connectionString) {
-			return this.pool;
-		}
-
+	private getPool(connectionString: string): Pool {
 		if (this.pools.has(connectionString)) {
 			return this.pools.get(connectionString)!;
 		}
@@ -39,25 +26,36 @@ export class PostgresRepository implements IRepository {
 		return newPool;
 	}
 
-	async getFullSchema(): Promise<DatabaseSchema> {
-		if (this.schemaCache && Date.now() - this.schemaCache.lastUpdated < this.CACHE_TTL_MS) {
+	async getFullSchema(connectionString: string): Promise<DatabaseSchema> {
+		if (
+			this.schemaCache &&
+			Date.now() - this.schemaCache.lastUpdated < this.CACHE_TTL_MS &&
+			!connectionString
+		) {
 			return this.schemaCache;
 		}
 
-		const client = await this.pool.connect();
+		// Get the appropriate connection pool
+		const pool = this.getPool(connectionString);
+		const client = await pool.connect();
 		try {
 			const [tablesResult, enumsResult] = await Promise.all([
 				this.fetchTablesWithMetadata(client),
 				this.fetchEnums(client)
 			]);
 
-			this.schemaCache = {
+			const schema = {
 				tables: tablesResult,
 				enums: enumsResult,
 				lastUpdated: Date.now()
 			};
 
-			return this.schemaCache;
+			// Only cache if using the default connection
+			if (!connectionString) {
+				this.schemaCache = schema;
+			}
+
+			return schema;
 		} finally {
 			client.release();
 		}
@@ -65,8 +63,8 @@ export class PostgresRepository implements IRepository {
 
 	async executeReadOnlyQuery(
 		sql: string,
-		params: unknown[] = [],
-		connectionString?: string
+		connectionString: string,
+		params: unknown[] = []
 	): Promise<Record<string, unknown>[]> {
 		// Get the appropriate connection pool
 		const pool = this.getPool(connectionString);
@@ -82,9 +80,15 @@ export class PostgresRepository implements IRepository {
 		}
 	}
 
-	async sampleTable(tableName: string, numRows: number): Promise<Record<string, unknown>[]> {
+	async sampleTable(
+		tableName: string,
+		numRows: number,
+		connectionString: string
+	): Promise<Record<string, unknown>[]> {
 		console.log(`🔍 Sampling table: ${tableName}, ${numRows} rows`);
-		const client = await this.pool.connect();
+		// Get the appropriate connection pool
+		const pool = this.getPool(connectionString);
+		const client = await pool.connect();
 		try {
 			this.validateTableName(tableName);
 			const safeLimit = Math.min(Math.max(1, numRows), 10);

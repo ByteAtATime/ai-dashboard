@@ -1,4 +1,4 @@
-import { injectable, inject } from '@needle-di/core';
+import { injectable } from '@needle-di/core';
 import { SchemaService } from './schema.service';
 import { OpenRouterService } from './openrouter.service';
 import { ToolService, type HandleToolCallResult } from './tool.service';
@@ -19,9 +19,10 @@ export class FollowupSqlGenerationService {
 	async generateFollowupSql(
 		followupInstruction: string,
 		previousContext: QueryContext,
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult> {
-		const schemaDescription = await this.schemaService.getFormattedSchemaForAI();
+		const schemaDescription = await this.schemaService.getFormattedSchemaForAI(connectionString);
 		const systemPrompt = this.promptService.createFollowupQueryPrompt(
 			followupInstruction,
 			previousContext,
@@ -62,7 +63,12 @@ export class FollowupSqlGenerationService {
 					tool_calls: message.tool_calls
 				});
 
-				finalResponse = await this.processAssistantResponse(message, messages, progressCallback);
+				finalResponse = await this.processAssistantResponse(
+					message,
+					messages,
+					connectionString,
+					progressCallback
+				);
 			}
 
 			return finalResponse;
@@ -75,6 +81,7 @@ export class FollowupSqlGenerationService {
 	private async processAssistantResponse(
 		message: any,
 		messages: Message[],
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult | null> {
 		if (message.tool_calls && message.tool_calls.length > 0) {
@@ -82,6 +89,7 @@ export class FollowupSqlGenerationService {
 			for (const toolCall of message.tool_calls) {
 				const result: HandleToolCallResult = await this.toolService.handleToolCall(
 					toolCall,
+					connectionString,
 					progressCallback
 				);
 				messages.push({

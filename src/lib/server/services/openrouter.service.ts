@@ -3,7 +3,7 @@ import { injectable } from '@needle-di/core';
 import type { OpenRouterRequest, OpenRouterResponse } from '../types/openrouter.types';
 import type { IOpenRouterService } from '../interfaces/openrouter.interface';
 
-const DEFAULT_MODEL = 'google/gemini-2.0-flash-001';
+const DEFAULT_MODEL = 'google/gemini-2.0-flash-exp:free';
 
 @injectable()
 export class OpenRouterService implements IOpenRouterService {

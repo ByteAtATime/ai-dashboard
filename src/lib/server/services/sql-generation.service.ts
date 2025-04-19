@@ -32,9 +32,10 @@ export class SqlGenerationService implements ISqlGenerationService {
 
 	async generateSql(
 		query: string,
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult> {
-		const schemaDescription = await this.schemaService.getFormattedSchemaForAI();
+		const schemaDescription = await this.schemaService.getFormattedSchemaForAI(connectionString);
 		const systemPrompt = this.promptService.createInitialQueryPrompt(schemaDescription);
 		const tools = this.toolService.getToolDefinitions();
 
@@ -78,7 +79,12 @@ export class SqlGenerationService implements ISqlGenerationService {
 					tool_calls: message.tool_calls
 				});
 
-				finalResponse = await this.processAssistantResponse(message, messages, progressCallback);
+				finalResponse = await this.processAssistantResponse(
+					message,
+					messages,
+					connectionString,
+					progressCallback
+				);
 			}
 
 			return finalResponse;
@@ -91,11 +97,13 @@ export class SqlGenerationService implements ISqlGenerationService {
 	async generateFollowupSql(
 		followupInstruction: string,
 		previousContext: QueryContext,
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult> {
 		return this.followupService.generateFollowupSql(
 			followupInstruction,
 			previousContext,
+			connectionString,
 			progressCallback
 		);
 	}
@@ -106,6 +114,7 @@ export class SqlGenerationService implements ISqlGenerationService {
 			tool_calls?: any[];
 		},
 		messages: Message[],
+		connectionString: string,
 		progressCallback?: ProgressCallback
 	): Promise<SqlGenerationResult | null> {
 		if (message.tool_calls && message.tool_calls.length > 0) {
@@ -113,6 +122,7 @@ export class SqlGenerationService implements ISqlGenerationService {
 			for (const toolCall of message.tool_calls) {
 				const result: HandleToolCallResult = await this.toolService.handleToolCall(
 					toolCall,
+					connectionString,
 					progressCallback
 				);
 				messages.push({

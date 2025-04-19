@@ -58,14 +58,18 @@ export class QueryRoutes {
 					connectionString = dataSource.connectionString;
 				}
 
-				const { display, explanation } = await this.sqlGenerationService.generateSql(query);
+				const { display, explanation } = await this.sqlGenerationService.generateSql(
+					query,
+					connectionString,
+					undefined
+				);
 
 				const displayWithResults = await Promise.all(
 					display.map(async (config: DisplayConfig) => {
 						const results = await this.repository.executeReadOnlyQuery(
 							config.sql,
-							[],
-							connectionString
+							connectionString,
+							[]
 						);
 						return {
 							...config,
@@ -153,6 +157,7 @@ export class QueryRoutes {
 
 					const { display, explanation } = await this.sqlGenerationService.generateSql(
 						query,
+						connectionString,
 						progressCallback
 					);
 
@@ -168,8 +173,8 @@ export class QueryRoutes {
 
 						const results = await this.repository.executeReadOnlyQuery(
 							config.sql,
-							[],
-							connectionString
+							connectionString,
+							[]
 						);
 						displayWithResults.push({
 							...config,
@@ -278,6 +283,7 @@ export class QueryRoutes {
 					const { display, explanation } = await this.sqlGenerationService.generateFollowupSql(
 						followupInstruction,
 						previousContext,
+						connectionString,
 						progressCallback
 					);
 
@@ -293,8 +299,8 @@ export class QueryRoutes {
 
 						const results = await this.repository.executeReadOnlyQuery(
 							config.sql,
-							[],
-							connectionString
+							connectionString,
+							[]
 						);
 						displayWithResults.push({
 							...config,
