@@ -77,19 +77,9 @@ Return ONLY valid JSON with this structure:
     "column": "y_axis_column_name",
     "label": "Y-Axis Label"
   },
-  "category": {
-    "column": "optional_category_column",
-    "label": "Category Label"
-  },
   "description": "What this chart visualizes"
 }
 \`\`\`
-
-## Chart Type Recommendations
-- Bar charts: Best for comparing values across categories
-- Line charts: Best for time series and trend visualization
-- Pie charts: Best for showing parts of a whole (proportions)
-- Scatter plots: Best for showing correlation between two variables
 
 ## SQL Best Practices
 - Use joins based on foreign keys.
