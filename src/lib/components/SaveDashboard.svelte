@@ -4,8 +4,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { goto } from '$app/navigation';
+	import { buttonVariants } from '$lib/components/ui/button';
 
-	// Props
 	let {
 		query,
 		display,
@@ -53,7 +53,6 @@
 
 			const result = await response.json();
 
-			// Close dialog and navigate to the dashboard
 			open = false;
 			goto(`/dashboards/${result.dashboard.id}`);
 		} catch (error) {
@@ -65,14 +64,8 @@
 	}
 </script>
 
-<Button variant="outline" onclick={() => (open = true)} disabled={!display || display.length === 0}>
-	Save Dashboard
-</Button>
-
-a
-
 <Dialog.Root bind:open>
-	<Dialog.Trigger>Save Dashboard</Dialog.Trigger>
+	<Dialog.Trigger class={buttonVariants({ variant: 'outline' })}>Save Dashboard</Dialog.Trigger>
 	<Dialog.Content>
 		<Dialog.Header>
 			<Dialog.Title>Save Dashboard</Dialog.Title>
