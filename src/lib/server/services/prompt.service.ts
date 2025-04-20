@@ -57,7 +57,7 @@ Return ONLY valid JSON with this structure:
   "type": "stat",
   "id": "column id from SQL",
   "name": "Title of stat card",
-  "unit": "Optional unit (%, $, etc.)",
+  "format": "Optional format string (e.g. '{0}%', '${0}')",
   "description": "What this metric represents"
 }
 \`\`\`
@@ -113,7 +113,7 @@ Sample Data: ${JSON.stringify(tableConfig.results.slice(0, 2))}`;
 				} else if (configType === 'stat') {
 					const statConfig = config as StatDisplay & { results: Record<string, unknown>[] };
 
-					return `Display ${index + 1}: Stat "${statConfig.name}" (${statConfig.unit || ''})
+					return `Display ${index + 1}: Stat "${statConfig.name}" (${statConfig.format || ''})
 SQL: ${statConfig.sql}
 Description: ${description}
 Value: ${JSON.stringify(statConfig.results[0]?.[statConfig.id])}`;
@@ -194,7 +194,7 @@ DISPLAY TYPE DETAILS:
   "sql": "SQL query that returns a single row with this stat",
   "id": "column_name",
   "name": "Stat display name",
-  "unit": "Optional unit (%, $, etc.)",
+  "format": "Optional format string (e.g. '{0}%', '${0}')",
   "description": "What this stat represents"
 }
 

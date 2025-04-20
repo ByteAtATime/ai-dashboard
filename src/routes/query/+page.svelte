@@ -17,6 +17,7 @@
 	import { cn } from '$lib/utils';
 	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
 	import { onMount } from 'svelte';
+	import StatsCard from '$lib/components/StatCard.svelte';
 
 	type DataSource = {
 		id: string;
@@ -464,30 +465,7 @@
 						</div>
 					</Card.Root>
 				{:else if config.type === 'stat'}
-					<Card.Root class="transition-all hover:shadow-md sm:col-span-6 lg:col-span-4">
-						<Card.Header class="pb-2">
-							<Card.Title class="text-muted-foreground text-sm font-medium"
-								>{(config as StatDisplay).name}</Card.Title
-							>
-						</Card.Header>
-						<Card.Content>
-							<div class="flex items-baseline">
-								<span class="text-3xl font-bold">
-									{config.results[0]?.[config.id] ?? 'N/A'}
-								</span>
-								{#if (config as StatDisplay).unit}
-									<span class="text-muted-foreground ml-1 text-xl"
-										>{(config as StatDisplay).unit}</span
-									>
-								{/if}
-							</div>
-							{#if (config as StatDisplay).description}
-								<p class="text-muted-foreground mt-3 text-sm">
-									{(config as StatDisplay).description}
-								</p>
-							{/if}
-						</Card.Content>
-					</Card.Root>
+					<StatsCard data={config.results} stats={config.stats} />
 				{:else if config.type === 'chart'}
 					<Card.Root class="lg:col-span-12">
 						<Card.Content class="p-0">

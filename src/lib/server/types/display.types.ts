@@ -10,7 +10,7 @@ export type StatDisplay = {
 	sql: string;
 	id: string;
 	name: string;
-	unit?: string;
+	format?: string;
 	description?: string;
 };
 
