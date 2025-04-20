@@ -1,27 +1,10 @@
 <script lang="ts">
-	import DataTable from '$lib/components/DataTable.svelte';
-	import ChartDisplay from '$lib/components/ChartDisplay.svelte';
-	import type {
-		TableDisplay,
-		StatDisplay,
-		ChartDisplay as ChartDisplayType,
-		DisplayConfig,
-		QueryContext
-	} from '$lib/server/types/display.types';
-
+	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import * as Card from '$lib/components/ui/card';
 	import { Alert } from '$lib/components/ui/alert';
-	import { Separator } from '$lib/components/ui/separator';
-	import { cn } from '$lib/utils';
 	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
-	import { onMount } from 'svelte';
-	import StatsCard from '$lib/components/StatCard.svelte';
-	import QueryForm from '$lib/components/QueryForm.svelte';
-	import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
-	import SqlDisplay from '$lib/components/SqlDisplay.svelte';
-	import DisplayResult from '$lib/components/DisplayResult.svelte';
+	import type { DisplayConfig, QueryContext } from '$lib/server/types/display.types';
 
 	type DataSource = {
 		id: string;
@@ -30,23 +13,42 @@
 		isDefault: boolean;
 	};
 
+	type Props = {
+		isLoading: boolean;
+		error: string;
+		displayConfigs: (DisplayConfig & { results: any[] })[];
+		progressMessages: string[];
+		sqls: string[];
+		currentStep: string;
+		showFollowup: boolean;
+		previousContext: QueryContext | null;
+		toggleSql: () => void;
+		resetQuery: () => void;
+		showSql: boolean;
+	};
+
+	let {
+		isLoading = $bindable(),
+		error = $bindable(),
+		displayConfigs = $bindable(),
+		progressMessages = $bindable(),
+		sqls = $bindable(),
+		currentStep = $bindable(),
+		showFollowup = $bindable(),
+		previousContext = $bindable(),
+		toggleSql,
+		resetQuery,
+		showSql
+	}: Props = $props();
+
+	// Internal state for the form
 	let dataSources = $state<DataSource[]>([]);
 	let selectedDataSourceId = $state('');
 	let dataSourcesLoading = $state(false);
 	let dataSourcesError = $state('');
-
 	let query = $state('');
 	let followupInstruction = $state('');
-	let isLoading = $state(false);
-	let error = $state('');
-	let displayConfigs = $state<(DisplayConfig & { results: any[] })[]>([]);
-	let progressMessages = $state<string[]>([]);
-	let sqls = $state<string[]>([]);
-	let showSql = $state(false);
-	let currentStep = $state('');
-	let showFollowup = $state(false);
-	let previousContext = $state<QueryContext | null>(null);
-	let originalQuery = $state('');
+	let originalQuery = $state(''); // Used to display original query in follow-up mode
 
 	onMount(async () => {
 		try {
@@ -176,7 +178,7 @@
 		progressMessages = [];
 		sqls = [];
 		currentStep = 'Processing follow-up...';
-		originalQuery = previousContext.query;
+		originalQuery = previousContext.query; // Store the query that led to this follow-up
 
 		try {
 			const response = await fetch('/api/query/followup/stream', {
@@ -230,13 +232,14 @@
 							currentStep = 'Complete';
 
 							previousContext = {
+								// Update context with the follow-up instruction as the new query
 								query: followupInstruction,
 								display: displayConfigs,
 								explanation: data.data.explanation,
 								dataSourceId: previousContext.dataSourceId || selectedDataSourceId
 							};
 
-							followupInstruction = '';
+							followupInstruction = ''; // Clear input after successful follow-up
 						} else if (data.type === 'error') {
 							error = data.error || 'An unexpected error occurred';
 						}
@@ -253,60 +256,139 @@
 		}
 	}
 
-	function resetQuery() {
-		displayConfigs = [];
-		sqls = [];
-		error = '';
-		progressMessages = [];
-		showFollowup = false;
-		previousContext = null;
-		showSql = false;
-		isLoading = false;
-		currentStep = '';
-	}
-
-	function toggleSql() {
-		showSql = !showSql;
+	function handleReset() {
+		query = '';
+		followupInstruction = '';
+		originalQuery = '';
+		resetQuery(); // Call the parent's reset function
 	}
 </script>
 
-<div class="container mx-auto max-w-6xl px-4 py-8">
-	<header class="mb-6">
-		<h1 class="text-3xl font-bold">Data Explorer</h1>
-		<p class="text-muted-foreground mt-2 text-lg">
-			Ask questions about your data in plain English and get instant visualizations
-		</p>
-	</header>
+<div class="mb-8 border-b pb-6">
+	{#if !showFollowup || !displayConfigs.length}
+		<!-- Initial Query Form -->
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				submitQuery();
+			}}
+			class="space-y-4"
+		>
+			<!-- Data Source Selector -->
+			{#if dataSourcesLoading}
+				<div class="text-muted-foreground text-sm">Loading data sources...</div>
+			{:else if dataSourcesError}
+				<Alert variant="destructive" class="mb-2">
+					<span>Error loading data sources: {dataSourcesError}</span>
+				</Alert>
+			{:else if dataSources.length === 0}
+				<Alert variant="destructive" class="mb-2">
+					<span
+						>No data sources available. <a href="/datasources" class="underline"
+							>Add a data source</a
+						>
+						to continue.</span
+					>
+				</Alert>
+			{:else}
+				<div class="grid gap-2">
+					<label for="dataSource" class="text-sm font-medium">Data Source</label>
+					<select
+						id="dataSource"
+						bind:value={selectedDataSourceId}
+						class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{#each dataSources as ds}
+							<option value={ds.id}>{ds.name}{ds.isDefault ? ' (Default)' : ''}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
 
-	<QueryForm
-		bind:isLoading
-		bind:error
-		bind:displayConfigs
-		bind:progressMessages
-		bind:sqls
-		bind:currentStep
-		bind:showFollowup
-		bind:previousContext
-		{resetQuery}
-		{toggleSql}
-		{showSql}
-	/>
+			<Textarea
+				bind:value={query}
+				placeholder="Ask a question about your data (e.g., 'Show me the top 5 customers by revenue and their total order count')"
+				rows={3}
+				class="w-full"
+			/>
+			<div class="flex flex-wrap gap-3">
+				<Button type="submit" disabled={isLoading || dataSources.length === 0}>
+					{isLoading ? 'Processing...' : 'Run Query'}
+				</Button>
+				<Button type="button" onclick={handleReset} variant="outline">Reset</Button>
+				{#if displayConfigs.length > 0}
+					<Button type="button" onclick={toggleSql} variant="outline">
+						{showSql ? 'Hide SQL' : 'Show SQL'}
+					</Button>
+					<SaveDashboard
+						{query}
+						display={displayConfigs}
+						explanation={previousContext?.explanation || ''}
+					/>
+				{/if}
 
-	{#if error}
-		<Alert variant="destructive" class="mb-6">
-			<span>{error}</span>
-		</Alert>
-	{/if}
+				<a
+					href="/datasources"
+					class="ml-auto flex items-center text-sm text-blue-600 hover:underline"
+				>
+					Manage Data Sources
+				</a>
+			</div>
+		</form>
+	{:else}
+		<!-- Follow-up Query Form -->
+		<div class="space-y-3">
+			{#if dataSources.length > 0 && selectedDataSourceId}
+				<div class="text-muted-foreground mb-2 text-sm">
+					<span class="font-medium">Data Source:</span>
+					{dataSources.find(
+						(ds) => ds.id === (previousContext?.dataSourceId || selectedDataSourceId)
+					)?.name || 'Unknown'}
+				</div>
+			{/if}
 
-	{#if isLoading}
-		<LoadingIndicator {currentStep} {progressMessages} />
-	{/if}
-
-	{#if sqls.length > 0 && showSql}
-		<SqlDisplay {sqls} />
-	{/if}
-
-	{#if displayConfigs.length > 0}
-		<DisplayResult {displayConfigs} />
+			{#if originalQuery}
+				<div class="text-muted-foreground text-sm">
+					<span class="font-medium">Original query:</span>
+					{originalQuery}
+				</div>
+			{/if}
+			<div class="text-muted-foreground mb-2 text-sm">
+				<span class="font-medium">Current query:</span>
+				{previousContext?.query || query}
+			</div>
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					submitFollowup();
+				}}
+				class="space-y-4"
+			>
+				<Textarea
+					bind:value={followupInstruction}
+					placeholder="Ask a follow-up question (e.g., 'Add a column showing total hours spent' or 'Filter to only show data from last month')"
+					rows={2}
+					class="w-full"
+				/>
+				<div class="flex flex-wrap gap-3">
+					<Button type="submit" disabled={isLoading}>
+						{isLoading ? 'Processing...' : 'Run Follow-up'}
+					</Button>
+					<Button type="button" onclick={handleReset} variant="outline" disabled={isLoading}>
+						New Query
+					</Button>
+					{#if sqls.length > 0}
+						<Button type="button" onclick={toggleSql} variant="secondary" class="ml-auto">
+							{showSql ? 'Hide SQL' : 'Show SQL'}
+						</Button>
+						<SaveDashboard
+							query={previousContext?.query || query}
+							display={displayConfigs}
+							explanation={previousContext?.explanation || ''}
+						></SaveDashboard>
+					{/if}
+				</div>
+			</form>
+		</div>
 	{/if}
 </div>

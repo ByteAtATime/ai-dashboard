@@ -42,4 +42,5 @@ export type QueryContext = {
 	query: string;
 	display: (DisplayConfig & { results: Record<string, unknown>[] })[];
 	explanation?: string;
+	dataSourceId?: string;
 };

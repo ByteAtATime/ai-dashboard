@@ -5,18 +5,12 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { goto } from '$app/navigation';
 	import { formatDate } from '$lib/utils';
-	import DataTable from '$lib/components/DataTable.svelte';
-	import ChartDisplay from '$lib/components/ChartDisplay.svelte';
-	import type {
-		TableDisplay,
-		StatDisplay,
-		ChartDisplay as ChartDisplayType
-	} from '$lib/server/types/display.types';
-	import StatsCard from '$lib/components/StatCard.svelte';
+	import DisplayResult from '$lib/components/DisplayResult.svelte';
+	import type { DisplayConfig } from '$lib/server/types/display.types';
 
 	const { dashboard } = $page.data;
 
-	let displayData = $derived(
+	let displayData: (DisplayConfig & { results: any[] })[] = $state(
 		typeof dashboard.displayData === 'string'
 			? JSON.parse(dashboard.displayData)
 			: dashboard.displayData
@@ -50,41 +44,5 @@
 		</Card.Root>
 	{/if}
 
-	<div class="grid gap-6">
-		{#each displayData as display, i}
-			<Card.Root>
-				{#if display.type === 'table'}
-					<Card.Header>
-						<Card.Title>{display.description || `Table ${i + 1}`}</Card.Title>
-					</Card.Header>
-					<Card.Content>
-						<DataTable data={display.results || []} columns={display.columns || {}} />
-					</Card.Content>
-				{:else if display.type === 'stat'}
-					<StatsCard
-						data={display.results}
-						id={display.id}
-						name={display.name}
-						format={display.format}
-					/>
-				{:else if display.type === 'chart'}
-					<Card.Content class="p-0">
-						<ChartDisplay
-							display={display as ChartDisplayType & { results: Record<string, unknown>[] }}
-						/>
-					</Card.Content>
-				{:else}
-					<Card.Header>
-						<Card.Title>{display.title || `Display ${i + 1}`}</Card.Title>
-						{#if display.description}
-							<Card.Description>{display.description}</Card.Description>
-						{/if}
-					</Card.Header>
-					<Card.Content>
-						<DataTable data={display.results || []} columns={display.columns || {}} />
-					</Card.Content>
-				{/if}
-			</Card.Root>
-		{/each}
-	</div>
+	<DisplayResult displayConfigs={displayData} />
 </div>
