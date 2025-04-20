@@ -3,32 +3,22 @@ import { SchemaService } from './schema.service';
 import { OpenRouterService } from './openrouter.service';
 import { ToolService, type HandleToolCallResult } from './tool.service';
 import { PromptService } from './prompt.service';
-import type { DisplayConfig, QueryContext } from '../types/display.types';
-import type { Message, OpenRouterRequest } from '../types/openrouter.types';
+import type { DisplayConfig } from '../types/display.types';
+import type { Message, OpenRouterRequest, AIToolCall } from '../types/openrouter.types';
 import {
 	type ISqlGenerationService,
 	type SqlGenerationResult,
 	type ProgressCallback
 } from '../interfaces/sql-generation.interface';
-import { FollowupSqlGenerationService } from './followup-sql-generation.service';
 
 @injectable()
 export class SqlGenerationService implements ISqlGenerationService {
-	private followupService: FollowupSqlGenerationService;
-
 	constructor(
 		private schemaService = inject(SchemaService),
 		private openRouterService = inject(OpenRouterService),
 		private toolService = inject(ToolService),
 		private promptService = inject(PromptService)
-	) {
-		this.followupService = new FollowupSqlGenerationService(
-			schemaService,
-			openRouterService,
-			toolService,
-			promptService
-		);
-	}
+	) {}
 
 	async generateSql(
 		query: string,
@@ -94,24 +84,10 @@ export class SqlGenerationService implements ISqlGenerationService {
 		}
 	}
 
-	async generateFollowupSql(
-		followupInstruction: string,
-		previousContext: QueryContext,
-		connectionString: string,
-		progressCallback?: ProgressCallback
-	): Promise<SqlGenerationResult> {
-		return this.followupService.generateFollowupSql(
-			followupInstruction,
-			previousContext,
-			connectionString,
-			progressCallback
-		);
-	}
-
 	private async processAssistantResponse(
 		message: {
 			content: string | null;
-			tool_calls?: any[];
+			tool_calls?: AIToolCall[];
 		},
 		messages: Message[],
 		connectionString: string,

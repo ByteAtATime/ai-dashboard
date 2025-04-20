@@ -1,23 +1,8 @@
 <script lang="ts">
-	import DataTable from '$lib/components/DataTable.svelte';
-	import ChartDisplay from '$lib/components/ChartDisplay.svelte';
-	import type {
-		TableDisplay,
-		StatDisplay,
-		ChartDisplay as ChartDisplayType,
-		DisplayConfig,
-		QueryContext
-	} from '$lib/server/types/display.types';
+	import type { DisplayConfig } from '$lib/server/types/display.types';
 
-	import { Button } from '$lib/components/ui/button';
-	import { Textarea } from '$lib/components/ui/textarea';
-	import * as Card from '$lib/components/ui/card';
 	import { Alert } from '$lib/components/ui/alert';
-	import { Separator } from '$lib/components/ui/separator';
-	import { cn } from '$lib/utils';
-	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
 	import { onMount } from 'svelte';
-	import StatsCard from '$lib/components/StatCard.svelte';
 	import QueryForm from '$lib/components/QueryForm.svelte';
 	import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
 	import SqlDisplay from '$lib/components/SqlDisplay.svelte';
@@ -35,8 +20,6 @@
 	let dataSourcesLoading = $state(false);
 	let dataSourcesError = $state('');
 
-	let query = $state('');
-	let followupInstruction = $state('');
 	let isLoading = $state(false);
 	let error = $state('');
 	let displayConfigs = $state<(DisplayConfig & { results: any[] })[]>([]);
@@ -44,9 +27,6 @@
 	let sqls = $state<string[]>([]);
 	let showSql = $state(false);
 	let currentStep = $state('');
-	let showFollowup = $state(false);
-	let previousContext = $state<QueryContext | null>(null);
-	let originalQuery = $state('');
 
 	onMount(async () => {
 		try {
@@ -68,198 +48,11 @@
 		}
 	});
 
-	async function submitQuery() {
-		if (!query.trim()) {
-			error = 'Please enter a query';
-			return;
-		}
-
-		if (!selectedDataSourceId && dataSources.length > 0) {
-			error = 'Please select a data source';
-			return;
-		}
-
-		isLoading = true;
-		error = '';
-		progressMessages = [];
-		displayConfigs = [];
-		sqls = [];
-		currentStep = 'Starting...';
-		followupInstruction = '';
-		showFollowup = false;
-		previousContext = null;
-		originalQuery = '';
-
-		try {
-			const response = await fetch('/api/query/stream', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					query,
-					dataSourceId: selectedDataSourceId
-				})
-			});
-
-			if (!response.ok) {
-				throw new Error(`Server error: ${response.status}`);
-			}
-
-			const reader = response.body?.getReader();
-			if (!reader) {
-				throw new Error('Stream reader not available');
-			}
-
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			while (true) {
-				const { done, value } = await reader.read();
-
-				if (done) {
-					break;
-				}
-
-				buffer += decoder.decode(value, { stream: true });
-
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					if (!line.trim()) continue;
-
-					try {
-						const data = JSON.parse(line);
-
-						if (data.type === 'progress') {
-							progressMessages = [...progressMessages, data.message];
-							currentStep = data.message;
-						} else if (data.type === 'result') {
-							displayConfigs = data.data.display || [];
-
-							sqls = displayConfigs.map((config) => config.sql);
-							currentStep = 'Complete';
-
-							previousContext = {
-								query: query,
-								display: displayConfigs,
-								explanation: data.data.explanation,
-								dataSourceId: selectedDataSourceId
-							};
-
-							showFollowup = true;
-						} else if (data.type === 'error') {
-							error = data.error || 'An unexpected error occurred';
-						}
-					} catch (e) {
-						console.error('Error parsing streaming response:', e, line);
-					}
-				}
-			}
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'An unexpected error occurred';
-			console.error('Query error:', err);
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	async function submitFollowup() {
-		if (!followupInstruction.trim() || !previousContext) {
-			error = 'Please enter a follow-up instruction';
-			return;
-		}
-
-		isLoading = true;
-		error = '';
-		progressMessages = [];
-		sqls = [];
-		currentStep = 'Processing follow-up...';
-		originalQuery = previousContext.query;
-
-		try {
-			const response = await fetch('/api/query/followup/stream', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					followupInstruction,
-					previousContext,
-					dataSourceId: previousContext.dataSourceId || selectedDataSourceId
-				})
-			});
-
-			if (!response.ok) {
-				throw new Error(`Server error: ${response.status}`);
-			}
-
-			const reader = response.body?.getReader();
-			if (!reader) {
-				throw new Error('Stream reader not available');
-			}
-
-			const decoder = new TextDecoder();
-			let buffer = '';
-
-			while (true) {
-				const { done, value } = await reader.read();
-
-				if (done) {
-					break;
-				}
-
-				buffer += decoder.decode(value, { stream: true });
-
-				const lines = buffer.split('\n');
-				buffer = lines.pop() || '';
-
-				for (const line of lines) {
-					if (!line.trim()) continue;
-
-					try {
-						const data = JSON.parse(line);
-
-						if (data.type === 'progress') {
-							progressMessages = [...progressMessages, data.message];
-							currentStep = data.message;
-						} else if (data.type === 'result') {
-							displayConfigs = data.data.display || [];
-							sqls = displayConfigs.map((config) => config.sql);
-							currentStep = 'Complete';
-
-							previousContext = {
-								query: followupInstruction,
-								display: displayConfigs,
-								explanation: data.data.explanation,
-								dataSourceId: previousContext.dataSourceId || selectedDataSourceId
-							};
-
-							followupInstruction = '';
-						} else if (data.type === 'error') {
-							error = data.error || 'An unexpected error occurred';
-						}
-					} catch (e) {
-						console.error('Error parsing streaming response:', e, line);
-					}
-				}
-			}
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'An unexpected error occurred';
-			console.error('Follow-up query error:', err);
-		} finally {
-			isLoading = false;
-		}
-	}
-
 	function resetQuery() {
 		displayConfigs = [];
 		sqls = [];
 		error = '';
 		progressMessages = [];
-		showFollowup = false;
-		previousContext = null;
 		showSql = false;
 		isLoading = false;
 		currentStep = '';
@@ -285,8 +78,6 @@
 		bind:progressMessages
 		bind:sqls
 		bind:currentStep
-		bind:showFollowup
-		bind:previousContext
 		{resetQuery}
 		{toggleSql}
 		{showSql}

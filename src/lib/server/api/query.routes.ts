@@ -2,7 +2,7 @@ import { inject, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
 import type { ProgressCallback } from '../interfaces/sql-generation.interface';
-import type { DisplayConfig, QueryContext } from '../types/display.types';
+import type { DisplayConfig } from '../types/display.types';
 import { SqlGenerationService } from '../services/sql-generation.service';
 import { PostgresRepository } from '../repositories/postgres.repository';
 import { DataSourceService } from '../services/datasource.service';
@@ -194,133 +194,6 @@ export class QueryRoutes {
 					);
 				} catch (error) {
 					console.error('Error processing streaming query:', error);
-					await stream.writeln(
-						JSON.stringify({
-							type: 'error',
-							error: error instanceof Error ? error.message : 'Unknown error',
-							status: 500
-						})
-					);
-				}
-			});
-		});
-
-		this.app.post('/followup/stream', async (c) => {
-			return streamText(c, async (stream) => {
-				try {
-					const body = await c.req.json();
-					const bodyData = body as {
-						followupInstruction: string;
-						previousContext: QueryContext;
-						dataSourceId: string;
-					};
-
-					const { followupInstruction, previousContext, dataSourceId } = bodyData;
-
-					if (!followupInstruction || typeof followupInstruction !== 'string') {
-						await stream.writeln(
-							JSON.stringify({
-								error: 'Followup instruction is required',
-								status: 400
-							})
-						);
-						return;
-					}
-
-					if (!previousContext || !previousContext.query || !previousContext.display) {
-						await stream.writeln(
-							JSON.stringify({
-								error: 'Previous query context is required',
-								status: 400
-							})
-						);
-						return;
-					}
-
-					let connectionString = '';
-					if (dataSourceId) {
-						const userId = await this.getUserIdFromRequest(c.req.raw);
-						if (!userId) {
-							await stream.writeln(
-								JSON.stringify({
-									type: 'error',
-									error: 'Unauthorized',
-									status: 401
-								})
-							);
-							return;
-						}
-						const dataSource = await this.dataSourceService.getById(dataSourceId, userId);
-						if (!dataSource) {
-							await stream.writeln(
-								JSON.stringify({
-									type: 'error',
-									error: 'Data source not found',
-									status: 404
-								})
-							);
-							return;
-						}
-						connectionString = dataSource.connectionString;
-					}
-
-					await stream.writeln(
-						JSON.stringify({
-							type: 'progress',
-							message: 'Processing followup instruction'
-						})
-					);
-
-					const progressCallback: ProgressCallback = async (progress: string) => {
-						await stream.writeln(
-							JSON.stringify({
-								type: 'progress',
-								message: progress
-							})
-						);
-					};
-
-					const { display, explanation } = await this.sqlGenerationService.generateFollowupSql(
-						followupInstruction,
-						previousContext,
-						connectionString,
-						progressCallback
-					);
-
-					const displayWithResults = [];
-					for (let i = 0; i < display.length; i++) {
-						const config = display[i];
-						await stream.writeln(
-							JSON.stringify({
-								type: 'progress',
-								message: `Executing SQL query ${i + 1} of ${display.length}`
-							})
-						);
-
-						const results = await this.repository.executeReadOnlyQuery(
-							config.sql,
-							connectionString,
-							[]
-						);
-						displayWithResults.push({
-							...config,
-							results
-						});
-					}
-
-					await stream.writeln(
-						JSON.stringify({
-							type: 'result',
-							data: {
-								query: followupInstruction,
-								originalQuery: previousContext.query,
-								display: displayWithResults,
-								explanation
-							}
-						})
-					);
-				} catch (error) {
-					console.error('Error processing streaming followup query:', error);
 					await stream.writeln(
 						JSON.stringify({
 							type: 'error',
