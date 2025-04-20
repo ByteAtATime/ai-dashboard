@@ -27,7 +27,7 @@ Return ONLY valid JSON with this structure:
   "display": [
     {
       "type": "table|stat|chart",
-      "sql": "SELECT ... FROM ...\\nLEFT JOIN ...;",
+      "sql": "SELECT ... FROM ...\\nLEFT JOIN ...;", // required for each element
       // ... type-specific properties
     },
     // ... additional visualizations
@@ -41,6 +41,7 @@ Return ONLY valid JSON with this structure:
 \`\`\`json
 {
   "type": "table",
+  "sql": "",
   "columns": {
     // you don't need to include all columns, just the ones you want to show in this table
     "database_column": "User-Friendly Label",
@@ -54,6 +55,7 @@ Return ONLY valid JSON with this structure:
 \`\`\`json
 {
   "type": "stat",
+  "sql": "",
   "id": "column id from SQL",
   "name": "Title of stat card",
   "format": "Optional format string (e.g. '{0}%', '${0}')",
@@ -67,7 +69,7 @@ Return ONLY valid JSON with this structure:
   "type": "chart",
   "chartType": "bar|line|pie|scatter",
   "title": "Chart Title",
-  "sql": "SQL query that returns data for this chart",
+  "sql": "",
   "xAxis": {
     "column": "x_axis_column_name",
     "label": "X-Axis Label"
