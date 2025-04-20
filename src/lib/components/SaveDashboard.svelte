@@ -65,7 +65,9 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class={buttonVariants({ variant: 'outline' })}>Save Dashboard</Dialog.Trigger>
+	<Dialog.Trigger type="button" class={buttonVariants({ variant: 'outline' })}
+		>Save Dashboard</Dialog.Trigger
+	>
 	<Dialog.Content>
 		<Dialog.Header>
 			<Dialog.Title>Save Dashboard</Dialog.Title>
