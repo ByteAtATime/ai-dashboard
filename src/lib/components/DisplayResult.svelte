@@ -18,7 +18,7 @@
 	let { displayConfigs }: Props = $props();
 </script>
 
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 	{#each displayConfigs as config, i}
 		{#if config.type === 'table'}
 			{@const tableConfig = config as TableDisplay & { results: any[] }}
