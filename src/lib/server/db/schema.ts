@@ -1,5 +1,7 @@
-import { pgTable, text, uuid, jsonb, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, jsonb, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema';
+
+export const dashboardVisibility = pgEnum('dashboard_visibility', ['private', 'public']);
 
 export const dashboards = pgTable('dashboards', {
 	id: uuid('id').primaryKey().defaultRandom(),
@@ -10,9 +12,7 @@ export const dashboards = pgTable('dashboards', {
 	query: text('query').notNull(),
 	displayData: jsonb('display_data').notNull(),
 	explanation: text('explanation'),
-	visibility: text('visibility', { enum: ['private', 'public'] })
-		.default('private')
-		.notNull(),
+	visibility: dashboardVisibility('visibility').default('private').notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
