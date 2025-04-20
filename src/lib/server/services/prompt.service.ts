@@ -1,5 +1,5 @@
 import { injectable } from '@needle-di/core';
-import type { QueryContext, TableDisplay, StatDisplay } from '../types/display.types';
+import type { QueryContext, TableDisplay, StatDisplay, ChartDisplay } from '../types/display.types';
 
 @injectable()
 export class PromptService {
@@ -18,7 +18,7 @@ ${schemaDescription}
 1. Analyze Request: Identify tables, joins, conditions.
 2. Sample Data: MUST call \`sampleTable(table_name, rows = 5)\` for relevant tables before writing SQL to understand structure, types, relationships (NULLs, keys, ranges).
 3. Generate SQL: Create optimized PostgreSQL queries for each visualization.
-4. Recommend Visualizations: Suggest appropriate displays (table, stat).
+4. Recommend Visualizations: Suggest appropriate displays (table, stat, chart).
 5. Return JSON Response: Output ONLY valid JSON matching the specified structure below.
 
 ## Output Format Specification
@@ -27,7 +27,7 @@ Return ONLY valid JSON with this structure:
 {
   "display": [
     {
-      "type": "table|stat",
+      "type": "table|stat|chart",
       "sql": "SELECT ... FROM ...\\nLEFT JOIN ...;",
       // ... type-specific properties
     },
@@ -61,6 +61,35 @@ Return ONLY valid JSON with this structure:
   "description": "What this metric represents"
 }
 \`\`\`
+
+#### 3. Charts
+\`\`\`json
+{
+  "type": "chart",
+  "chartType": "bar|line|pie|scatter",
+  "title": "Chart Title",
+  "sql": "SQL query that returns data for this chart",
+  "xAxis": {
+    "column": "x_axis_column_name",
+    "label": "X-Axis Label"
+  },
+  "yAxis": {
+    "column": "y_axis_column_name",
+    "label": "Y-Axis Label"
+  },
+  "category": {
+    "column": "optional_category_column",
+    "label": "Category Label"
+  },
+  "description": "What this chart visualizes"
+}
+\`\`\`
+
+## Chart Type Recommendations
+- Bar charts: Best for comparing values across categories
+- Line charts: Best for time series and trend visualization
+- Pie charts: Best for showing parts of a whole (proportions)
+- Scatter plots: Best for showing correlation between two variables
 
 ## SQL Best Practices
 - Use joins based on foreign keys.
@@ -98,6 +127,16 @@ Sample Data: ${JSON.stringify(tableConfig.results.slice(0, 2))}`;
 SQL: ${statConfig.sql}
 Description: ${description}
 Value: ${JSON.stringify(statConfig.results[0]?.[statConfig.id])}`;
+				} else if (configType === 'chart') {
+					const chartConfig = config as ChartDisplay & { results: Record<string, unknown>[] };
+
+					return `Display ${index + 1}: Chart "${chartConfig.title}" (${chartConfig.chartType})
+SQL: ${chartConfig.sql}
+X-Axis: ${chartConfig.xAxis.column} (${chartConfig.xAxis.label})
+Y-Axis: ${chartConfig.yAxis.column} (${chartConfig.yAxis.label})
+${chartConfig.category ? `Category: ${chartConfig.category.column} (${chartConfig.category.label})` : ''}
+Description: ${description}
+Sample Data: ${JSON.stringify(chartConfig.results.slice(0, 2))}`;
 				}
 				return '';
 			})
@@ -129,7 +168,7 @@ INSTRUCTIONS:
 {
   "display": [
     {
-      "type": "table|stat",
+      "type": "table|stat|chart",
       "sql": "SQL query for this specific visualization",
       ... other visualization-specific properties
     },
@@ -168,6 +207,33 @@ DISPLAY TYPE DETAILS:
   "unit": "Optional unit (%, $, etc.)",
   "description": "What this stat represents"
 }
+
+3. For charts:
+{
+  "type": "chart",
+  "chartType": "bar|line|pie|scatter",
+  "title": "Chart Title",
+  "sql": "SQL query that returns data for this chart",
+  "xAxis": {
+    "column": "x_axis_column_name",
+    "label": "X-Axis Label"
+  },
+  "yAxis": {
+    "column": "y_axis_column_name",
+    "label": "Y-Axis Label"
+  },
+  "category": {
+    "column": "optional_category_column",
+    "label": "Category Label"
+  },
+  "description": "What this chart visualizes"
+}
+
+CHART TYPE GUIDANCE:
+- Bar charts: Best for comparing values across categories
+- Line charts: Best for time series and trend visualization
+- Pie charts: Best for showing parts of a whole (proportions)
+- Scatter plots: Best for showing correlation between two variables
 
 IMPORTANT:
 - Each display object MUST have its own SQL query

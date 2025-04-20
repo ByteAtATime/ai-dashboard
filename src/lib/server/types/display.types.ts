@@ -14,7 +14,29 @@ export type StatDisplay = {
 	description?: string;
 };
 
-export type DisplayConfig = TableDisplay | StatDisplay;
+export type ChartType = 'bar' | 'line' | 'pie' | 'scatter';
+
+export type ChartDisplay = {
+	type: 'chart';
+	chartType: ChartType;
+	sql: string;
+	title: string;
+	xAxis: {
+		column: string;
+		label: string;
+	};
+	yAxis: {
+		column: string;
+		label: string;
+	};
+	category?: {
+		column: string;
+		label: string;
+	};
+	description?: string;
+};
+
+export type DisplayConfig = TableDisplay | StatDisplay | ChartDisplay;
 
 export type QueryContext = {
 	query: string;

@@ -6,6 +6,12 @@
 	import { goto } from '$app/navigation';
 	import { formatDate } from '$lib/utils';
 	import DataTable from '$lib/components/DataTable.svelte';
+	import ChartDisplay from '$lib/components/ChartDisplay.svelte';
+	import type {
+		TableDisplay,
+		StatDisplay,
+		ChartDisplay as ChartDisplayType
+	} from '$lib/server/types/display.types';
 
 	// Get the dashboard from the page data
 	const { dashboard } = $page.data;
@@ -48,15 +54,47 @@
 	<div class="grid gap-6">
 		{#each displayData as display, i}
 			<Card.Root>
-				<Card.Header>
-					<Card.Title>{display.title || `Chart ${i + 1}`}</Card.Title>
-					{#if display.description}
-						<Card.Description>{display.description}</Card.Description>
-					{/if}
-				</Card.Header>
-				<Card.Content>
-					<DataTable data={display.results || []} columns={display.columns || {}} />
-				</Card.Content>
+				{#if display.type === 'table'}
+					<Card.Header>
+						<Card.Title>{display.description || `Table ${i + 1}`}</Card.Title>
+					</Card.Header>
+					<Card.Content>
+						<DataTable data={display.results || []} columns={display.columns || {}} />
+					</Card.Content>
+				{:else if display.type === 'stat'}
+					<Card.Header>
+						<Card.Title>{display.name || `Stat ${i + 1}`}</Card.Title>
+						{#if display.description}
+							<Card.Description>{display.description}</Card.Description>
+						{/if}
+					</Card.Header>
+					<Card.Content>
+						<div class="flex items-baseline">
+							<span class="text-3xl font-bold">
+								{display.results?.[0]?.[display.id] ?? 'N/A'}
+							</span>
+							{#if display.unit}
+								<span class="text-muted-foreground ml-1 text-xl">{display.unit}</span>
+							{/if}
+						</div>
+					</Card.Content>
+				{:else if display.type === 'chart'}
+					<Card.Content class="p-0">
+						<ChartDisplay
+							display={display as ChartDisplayType & { results: Record<string, unknown>[] }}
+						/>
+					</Card.Content>
+				{:else}
+					<Card.Header>
+						<Card.Title>{display.title || `Display ${i + 1}`}</Card.Title>
+						{#if display.description}
+							<Card.Description>{display.description}</Card.Description>
+						{/if}
+					</Card.Header>
+					<Card.Content>
+						<DataTable data={display.results || []} columns={display.columns || {}} />
+					</Card.Content>
+				{/if}
 			</Card.Root>
 		{/each}
 	</div>

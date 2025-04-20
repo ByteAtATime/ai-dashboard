@@ -1,11 +1,13 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import ChartDisplay from '$lib/components/ChartDisplay.svelte';
 	import type {
 		TableDisplay,
 		StatDisplay,
+		ChartDisplay as ChartDisplayType,
 		DisplayConfig,
 		QueryContext
-	} from '$lib/server/openrouter';
+	} from '$lib/server/types/display.types';
 
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -484,6 +486,14 @@
 									{(config as StatDisplay).description}
 								</p>
 							{/if}
+						</Card.Content>
+					</Card.Root>
+				{:else if config.type === 'chart'}
+					<Card.Root class="lg:col-span-12">
+						<Card.Content class="p-0">
+							<ChartDisplay
+								display={config as ChartDisplayType & { results: Record<string, unknown>[] }}
+							/>
 						</Card.Content>
 					</Card.Root>
 				{/if}
