@@ -1,14 +1,4 @@
-import {
-	pgTable,
-	serial,
-	text,
-	integer,
-	uuid,
-	jsonb,
-	timestamp,
-	foreignKey,
-	boolean
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, jsonb, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema';
 
 export const dashboards = pgTable('dashboards', {
@@ -20,6 +10,9 @@ export const dashboards = pgTable('dashboards', {
 	query: text('query').notNull(),
 	displayData: jsonb('display_data').notNull(),
 	explanation: text('explanation'),
+	visibility: text('visibility', { enum: ['private', 'public'] })
+		.default('private')
+		.notNull(),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
