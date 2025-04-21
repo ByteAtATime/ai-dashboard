@@ -1,5 +1,3 @@
-import type { DatabaseSchema } from './db.types';
-
 export type SampleTableToolCall = {
 	id: string;
 	type: 'function';

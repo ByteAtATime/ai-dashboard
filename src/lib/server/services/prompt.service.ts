@@ -27,10 +27,10 @@ Return ONLY valid JSON with this structure:
   "display": [
     {
       "type": "table|stat|chart",
-      "sql": "SELECT ... FROM ...\\nLEFT JOIN ...;", // required for each element
-      // ... type-specific properties
+      "sql": "SELECT ... FROM ...\\nLEFT JOIN ...;", 
+
     },
-    // ... additional visualizations
+
   ]
 }
 \`\`\`
@@ -43,7 +43,7 @@ Return ONLY valid JSON with this structure:
   "type": "table",
   "sql": "",
   "columns": {
-    // you don't need to include all columns, just the ones you want to show in this table
+
     "database_column": "User-Friendly Label",
     "another_column": "Another Label"
   },

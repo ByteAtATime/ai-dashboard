@@ -1,200 +1,239 @@
-import { injectable } from '@needle-di/core';
+import { inject, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
-import { dashboards } from '../db/schema';
-import { db } from '../db';
-import { eq, and } from 'drizzle-orm';
+import { zValidator } from '@hono/zod-validator';
+
+import type { IDashboardService } from '../interfaces/services/dashboard.service.interface';
+import type { AppEnv } from '.';
+import { DashboardService } from '../services/dashboard.service';
+import {
+	updateDashboardSchema,
+	updateDashboardItemSchema,
+	insertDashboardItemSchema,
+	insertFullDashboardSchema
+} from '../types/dashboard.types';
+
+class NotFoundError extends Error {
+	constructor(message = 'Resource not found') {
+		super(message);
+		this.name = 'NotFoundError';
+	}
+}
+class ForbiddenError extends Error {
+	constructor(message = 'Forbidden') {
+		super(message);
+		this.name = 'ForbiddenError';
+	}
+}
 
 @injectable()
 export class DashboardRoutes {
-	private app: Hono;
+	private app: Hono<AppEnv>;
 
-	constructor() {
+	constructor(private dashboardService: IDashboardService = inject(DashboardService)) {
 		this.app = new Hono();
 		this.setupRoutes();
 	}
 
-	private async getUserIdFromRequest(request: Request): Promise<string | null> {
-		try {
-			const { auth } = await import('../auth');
-			const sessionResult = await auth.api.getSession({ headers: request.headers });
-			if (sessionResult && sessionResult.user && sessionResult.user.id) {
-				return sessionResult.user.id;
-			}
-			return null;
-		} catch (error) {
-			console.error('Error getting user session:', error);
-			return null;
-		}
-	}
-
 	private setupRoutes() {
-		// Save dashboard endpoint
-		this.app.post('/', async (c) => {
-			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
+		const app = this.app;
 
-				if (!userId) {
-					return c.json({ error: 'Unauthorized' }, 401);
-				}
-
-				const body = await c.req.json();
-				const { name, query, display, explanation, visibility } = body;
-
-				if (!name || !query || !display) {
-					return c.json({ error: 'Name, query, and display data are required' }, 400);
-				}
-
-				const [dashboard] = await db
-					.insert(dashboards)
-					.values({
-						userId,
-						name,
-						query,
-						displayData: display,
-						explanation: explanation || null,
-						visibility: visibility === 'public' ? 'public' : 'private' // Default to private
-					})
-					.returning();
-
-				return c.json({
-					message: 'Dashboard saved successfully',
-					dashboard
-				});
-			} catch (error) {
-				console.error('Error saving dashboard:', error);
-				return c.json(
-					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
-					},
-					500
-				);
+		app.use('*', async (c, next) => {
+			const user = c.get('user');
+			if (!user) {
+				return c.json({ error: 'Unauthorized' }, 401);
 			}
+			await next();
 		});
 
-		// Get all dashboards for the authenticated user
-		this.app.get('/', async (c) => {
+		app.get('/', async (c) => {
+			const userId = c.var.user!.id;
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
-
-				if (!userId) {
-					return c.json({ error: 'Unauthorized' }, 401);
-				}
-
-				const allDashboards = await db
-					.select({
-						id: dashboards.id,
-						name: dashboards.name,
-						createdAt: dashboards.createdAt
-					})
-					.from(dashboards)
-					.where(eq(dashboards.userId, userId));
-
-				return c.json(allDashboards);
+				const dashboards = await this.dashboardService.getDashboardsForUser(userId);
+				return c.json(dashboards);
 			} catch (error) {
 				console.error('Error fetching dashboards:', error);
-				return c.json(
-					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
-					},
-					500
-				);
+				return c.json({ error: 'Internal Server Error' }, 500);
 			}
 		});
 
-		// Get dashboard by ID
-		this.app.get('/:id', async (c) => {
+		app.post(
+			'/',
+			zValidator('json', insertFullDashboardSchema.omit({ userId: true })),
+			async (c) => {
+				const validatedData = { ...c.req.valid('json'), userId: c.var.user!.id };
+				try {
+					const newDashboard = await this.dashboardService.createDashboard(validatedData);
+					return c.json(newDashboard, 201);
+				} catch (error) {
+					console.error('Error creating dashboard:', error);
+					if (error instanceof ForbiddenError) {
+						return c.json({ error: 'Invalid data source specified' }, 403);
+					}
+					return c.json({ error: 'Internal Server Error' }, 500);
+				}
+			}
+		);
+
+		app.get('/:id', async (c) => {
+			const userId = c.var.user!.id;
+			const id = c.req.param('id');
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw); // Can be null for public dashboards
-				const id = c.req.param('id');
-
-				const [dashboard] = await db.select().from(dashboards).where(eq(dashboards.id, id));
-
+				const dashboard = await this.dashboardService.getDashboardById(id, userId);
 				if (!dashboard) {
 					return c.json({ error: 'Dashboard not found' }, 404);
 				}
-
-				// Check permissions
-				if (dashboard.visibility === 'private') {
-					if (!userId || dashboard.userId !== userId) {
-						return c.json({ error: 'Dashboard not found or unauthorized' }, 404);
-					}
-				} // Public dashboards are accessible to anyone
-
 				return c.json(dashboard);
 			} catch (error) {
-				console.error('Error fetching dashboard:', error);
-				return c.json(
-					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
-					},
-					500
-				);
+				console.error(`Error fetching dashboard ${id}:`, error);
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
 			}
 		});
 
-		// Update dashboard by ID (only if owned by the authenticated user)
-		this.app.put('/:id', async (c) => {
+		app.put('/:id', zValidator('json', updateDashboardSchema), async (c) => {
+			const userId = c.var.user!.id;
+			const id = c.req.param('id');
+			const validatedData = c.req.valid('json');
+
+			if (Object.keys(validatedData).length === 0) {
+				return c.json({ error: 'No fields provided for update' }, 400);
+			}
+
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
-				const id = c.req.param('id');
-
-				if (!userId) {
-					return c.json({ error: 'Unauthorized' }, 401);
+				const updatedDashboard = await this.dashboardService.updateDashboard(
+					id,
+					userId,
+					validatedData
+				);
+				if (!updatedDashboard) {
+					return c.json({ error: 'Dashboard not found or no changes made' }, 404);
 				}
-
-				const body = await c.req.json();
-				const { name, query, display, explanation, visibility } = body;
-
-				// Fetch the dashboard first to ensure ownership
-				const [existingDashboard] = await db
-					.select({ userId: dashboards.userId })
-					.from(dashboards)
-					.where(eq(dashboards.id, id));
-
-				if (!existingDashboard) {
+				return c.json(updatedDashboard);
+			} catch (error) {
+				console.error(`Error updating dashboard ${id}:`, error);
+				if (error instanceof NotFoundError) {
 					return c.json({ error: 'Dashboard not found' }, 404);
 				}
-
-				if (existingDashboard.userId !== userId) {
-					return c.json({ error: 'Unauthorized to update this dashboard' }, 403);
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
 				}
+				return c.json({ error: 'Internal Server Error' }, 500);
+			}
+		});
 
-				// Prepare updates - only include fields that are provided in the body
-				const updates: Partial<typeof dashboards.$inferInsert> = {};
-				if (name !== undefined) updates.name = name;
-				if (query !== undefined) updates.query = query;
-				if (display !== undefined) updates.displayData = display;
-				if (explanation !== undefined) updates.explanation = explanation;
-				if (visibility === 'public' || visibility === 'private') {
-					updates.visibility = visibility;
+		app.delete('/:id', async (c) => {
+			const userId = c.var.user!.id;
+			const id = c.req.param('id');
+			try {
+				const success = await this.dashboardService.deleteDashboard(id, userId);
+				if (!success) {
+					return c.json({ error: 'Dashboard not found' }, 404);
 				}
-
-				if (Object.keys(updates).length === 0) {
-					return c.json({ error: 'No fields provided for update' }, 400);
-				}
-
-				const [updatedDashboard] = await db
-					.update(dashboards)
-					.set(updates)
-					.where(and(eq(dashboards.id, id), eq(dashboards.userId, userId)))
-					.returning();
-
-				return c.json({
-					message: 'Dashboard updated successfully',
-					dashboard: updatedDashboard
-				});
+				return c.body(null, 204);
 			} catch (error) {
-				console.error('Error updating dashboard:', error);
-				return c.json(
-					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
-					},
-					500
+				console.error(`Error deleting dashboard ${id}:`, error);
+				if (error instanceof NotFoundError) {
+					return c.json({ error: 'Dashboard not found' }, 404);
+				}
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
+			}
+		});
+
+		app.post('/:dashboardId/items', zValidator('json', insertDashboardItemSchema), async (c) => {
+			const userId = c.var.user!.id;
+			const dashboardId = c.req.param('dashboardId');
+			const validatedData = c.req.valid('json');
+			try {
+				const newItem = await this.dashboardService.addDashboardItem(
+					dashboardId,
+					userId,
+					validatedData
 				);
+				return c.json(newItem, 201);
+			} catch (error) {
+				console.error(`Error adding item to dashboard ${dashboardId}:`, error);
+				if (error instanceof NotFoundError) {
+					return c.json({ error: 'Dashboard not found' }, 404);
+				}
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
+			}
+		});
+
+		app.put('/items/:itemId', zValidator('json', updateDashboardItemSchema), async (c) => {
+			const userId = c.var.user!.id;
+			const itemId = c.req.param('itemId');
+			const validatedData = c.req.valid('json');
+
+			if (Object.keys(validatedData).length === 0) {
+				return c.json({ error: 'No fields provided for update' }, 400);
+			}
+
+			try {
+				const updatedItem = await this.dashboardService.updateDashboardItem(
+					itemId,
+					userId,
+					validatedData
+				);
+				if (!updatedItem) {
+					return c.json({ error: 'Dashboard item not found or no changes made' }, 404);
+				}
+				return c.json(updatedItem);
+			} catch (error) {
+				console.error(`Error updating dashboard item ${itemId}:`, error);
+				if (error instanceof NotFoundError) {
+					return c.json({ error: 'Dashboard item not found' }, 404);
+				}
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
+			}
+		});
+
+		app.delete('/items/:itemId', async (c) => {
+			const userId = c.var.user!.id;
+			const itemId = c.req.param('itemId');
+			try {
+				const success = await this.dashboardService.deleteDashboardItem(itemId, userId);
+				if (!success) {
+					return c.json({ error: 'Dashboard item not found' }, 404);
+				}
+				return c.body(null, 204);
+			} catch (error) {
+				console.error(`Error deleting dashboard item ${itemId}:`, error);
+				if (error instanceof NotFoundError) {
+					return c.json({ error: 'Dashboard item not found' }, 404);
+				}
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
+			}
+		});
+
+		app.post('/items/:itemId/refresh', async (c) => {
+			const userId = c.var.user!.id;
+			const itemId = c.req.param('itemId');
+			try {
+				const executionResult = await this.dashboardService.refreshDashboardItem(itemId, userId);
+				return c.json(executionResult);
+			} catch (error) {
+				console.error(`Error refreshing dashboard item ${itemId}:`, error);
+				if (error instanceof NotFoundError) {
+					return c.json({ error: 'Dashboard item not found' }, 404);
+				}
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Forbidden' }, 403);
+				}
+				return c.json({ error: 'Internal Server Error' }, 500);
 			}
 		});
 	}
@@ -203,3 +242,5 @@ export class DashboardRoutes {
 		return this.app;
 	}
 }
+
+export type DashboardAppType = ReturnType<DashboardRoutes['routes']>;

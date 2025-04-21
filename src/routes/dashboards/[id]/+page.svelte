@@ -7,17 +7,10 @@
 	import { toast } from 'svelte-sonner';
 	import { formatDate } from '$lib/utils';
 	import DisplayResult from '$lib/components/DisplayResult.svelte';
-	import type { DisplayConfig } from '$lib/server/types/display.types';
 
 	const { data } = $props();
 	const { dashboard, user } = $derived(data);
 	const isOwner = $derived(user?.id === dashboard.userId);
-
-	let displayData: (DisplayConfig & { results: any[] })[] = $derived(
-		typeof dashboard.displayData === 'string'
-			? JSON.parse(dashboard.displayData)
-			: dashboard.displayData
-	);
 
 	let currentVisibility = $state(dashboard.visibility || 'private');
 	$effect(() => {
@@ -61,7 +54,6 @@
 				<p class="text-muted-foreground text-sm">
 					Created: {formatDate(dashboard.createdAt)}
 				</p>
-				<p class="text-muted-foreground mt-2 text-sm">Query: {dashboard.query}</p>
 			</div>
 			<div class="flex flex-col items-end gap-2">
 				<Button variant="ghost" size="sm" href="/dashboards">Back to Dashboards</Button>
@@ -102,16 +94,36 @@
 
 	<Separator class="my-6" />
 
-	{#if dashboard.explanation}
-		<Card.Root class="mb-6">
-			<Card.Header>
-				<Card.Title>Explanation</Card.Title>
-			</Card.Header>
-			<Card.Content>
-				<p>{dashboard.explanation}</p>
-			</Card.Content>
-		</Card.Root>
-	{/if}
+	{#if dashboard.items && dashboard.items.length > 0}
+		<div class="space-y-8">
+			{#each dashboard.items as item (item.id)}
+				{@const latestExecution = item.latestExecution}
+				{@const itemLayout =
+					typeof item.layout === 'string' ? JSON.parse(item.layout) : item.layout}
 
-	<DisplayResult displayConfigs={displayData} />
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Item {item.id}</Card.Title>
+						{#if item.sql}
+							<Card.Description class="font-mono text-xs">{item.sql}</Card.Description>
+						{/if}
+					</Card.Header>
+					<Card.Content>
+						{#if latestExecution}
+							<DisplayResult
+								displayConfigs={[{ ...itemLayout, results: latestExecution.results.data }]}
+							/>
+							<p class="text-muted-foreground mt-2 text-xs">
+								Executed: {formatDate(latestExecution.createdAt)}
+							</p>
+						{:else}
+							<p class="text-muted-foreground text-sm">This item has not been executed yet.</p>
+						{/if}
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{:else}
+		<p class="text-muted-foreground text-center">This dashboard currently has no items.</p>
+	{/if}
 </div>

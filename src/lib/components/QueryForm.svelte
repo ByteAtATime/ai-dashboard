@@ -15,34 +15,36 @@
 
 	type Props = {
 		isLoading: boolean;
+		query: string;
 		error: string;
-		displayConfigs: (DisplayConfig & { results: any[] })[];
+		displayConfigs: (DisplayConfig & { results: Record<string, unknown>[] })[];
 		progressMessages: string[];
-		sqls: string[];
 		currentStep: string;
+		selectedDataSourceId: string;
 		toggleSql: () => void;
 		resetQuery: () => void;
 		showSql: boolean;
+		disabled?: boolean;
 	};
 
 	let {
 		isLoading = $bindable(),
+		query = $bindable(),
 		error = $bindable(),
 		displayConfigs = $bindable(),
 		progressMessages = $bindable(),
-		sqls = $bindable(),
 		currentStep = $bindable(),
+		selectedDataSourceId = $bindable(),
 		toggleSql,
 		resetQuery,
-		showSql
+		showSql,
+		disabled = false
 	}: Props = $props();
 
 	// Internal state for the form
 	let dataSources = $state<DataSource[]>([]);
-	let selectedDataSourceId = $state('');
 	let dataSourcesLoading = $state(false);
 	let dataSourcesError = $state('');
-	let query = $state('');
 
 	onMount(async () => {
 		try {
@@ -79,7 +81,6 @@
 		error = '';
 		progressMessages = [];
 		displayConfigs = [];
-		sqls = [];
 		currentStep = 'Starting...';
 
 		try {
@@ -129,7 +130,6 @@
 							currentStep = data.message;
 						} else if (data.type === 'result') {
 							displayConfigs = data.data.display || [];
-							sqls = displayConfigs.map((config) => config.sql);
 							currentStep = 'Complete';
 						} else if (data.type === 'error') {
 							error = data.error || 'An unexpected error occurred';
@@ -183,8 +183,9 @@
 					id="dataSource"
 					bind:value={selectedDataSourceId}
 					class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					{disabled}
 				>
-					{#each dataSources as ds}
+					{#each dataSources as ds (ds.id)}
 						<option value={ds.id}>{ds.name}{ds.isDefault ? ' (Default)' : ''}</option>
 					{/each}
 				</select>
@@ -196,17 +197,23 @@
 			placeholder="Ask a question about your data (e.g., 'Show me the top 5 customers by revenue and their total order count')"
 			rows={3}
 			class="w-full"
+			{disabled}
 		/>
 		<div class="flex flex-wrap gap-3">
-			<Button type="submit" disabled={isLoading || dataSources.length === 0}>
+			<Button type="submit" disabled={isLoading || dataSources.length === 0 || disabled}>
 				{isLoading ? 'Processing...' : 'Run Query'}
 			</Button>
-			<Button type="button" onclick={handleReset} variant="outline">Reset</Button>
-			{#if displayConfigs.length > 0}
-				<Button type="button" onclick={toggleSql} variant="outline">
+			<Button type="button" onclick={handleReset} variant="outline" {disabled}>Reset</Button>
+			{#if displayConfigs.length > 0 && !disabled}
+				<Button type="button" onclick={toggleSql} variant="outline" {disabled}>
 					{showSql ? 'Hide SQL' : 'Show SQL'}
 				</Button>
-				<SaveDashboard {query} display={displayConfigs} explanation="" />
+				<SaveDashboard
+					{query}
+					display={displayConfigs}
+					explanation=""
+					dataSourceId={selectedDataSourceId}
+				/>
 			{/if}
 
 			<a

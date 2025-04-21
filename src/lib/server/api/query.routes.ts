@@ -171,6 +171,8 @@ export class QueryRoutes {
 							})
 						);
 
+						console.log('config', config);
+
 						const results = await this.repository.executeReadOnlyQuery(
 							config.sql,
 							connectionString,

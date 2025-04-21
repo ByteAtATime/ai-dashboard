@@ -5,7 +5,7 @@
 		name,
 		format
 	}: {
-		data: Record<string, any>[];
+		data: Record<string, unknown>[];
 		id: string;
 		name: string;
 		format?: string;
@@ -15,11 +15,11 @@
 		return data.length > 0 ? data[0] : {};
 	});
 
-	function formatValue(value: any, format?: string): string {
+	function formatValue(value: unknown, format?: string): string {
 		if (value === undefined) return 'N/A';
 		if (!format) return String(value);
 
-		return format.replace('{0}', value);
+		return format.replace('{0}', value?.toString() ?? '');
 	}
 
 	const formattedStat = $derived(

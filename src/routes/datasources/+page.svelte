@@ -5,7 +5,6 @@
 		Card,
 		CardContent,
 		CardDescription,
-		CardFooter,
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
@@ -180,7 +179,7 @@
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{#each dataSources as ds}
+						{#each dataSources as ds (ds.id)}
 							<TableRow>
 								<TableCell>{ds.name}</TableCell>
 								<TableCell>

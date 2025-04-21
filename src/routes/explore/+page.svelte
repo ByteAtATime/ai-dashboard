@@ -15,7 +15,7 @@
 	let isLoading = $state(false);
 	let error = $state('');
 	let selectedTable = $state('');
-	let sampleRows = $state<Record<string, any>[]>([]);
+	let sampleRows = $state<Record<string, unknown>[]>([]);
 	let sampleLimit = $state(5);
 
 	$effect.pre(() => {
@@ -113,7 +113,7 @@
 					<div class="py-4 text-center text-gray-500">No tables found</div>
 				{:else}
 					<ul class="space-y-1">
-						{#each tables as table}
+						{#each tables as table (table.name)}
 							<li>
 								<button
 									onclick={() => (selectedTable = table.name)}
@@ -149,7 +149,7 @@
 									bind:value={sampleLimit}
 									class="rounded border border-gray-300 px-2 py-1 text-sm"
 								>
-									{#each [1, 3, 5, 10] as limit}
+									{#each [1, 3, 5, 10] as limit (limit)}
 										<option value={limit}>{limit}</option>
 									{/each}
 								</select>
@@ -191,7 +191,7 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each tables.find((t) => t.name === selectedTable)?.columns || [] as column}
+									{#each tables.find((t) => t.name === selectedTable)?.columns || [] as column (column.name)}
 										<tr class="border-b border-gray-100 last:border-0">
 											<td class="px-3 py-2 font-medium">{column.name}</td>
 											<td class="px-3 py-2 text-gray-600">{column.type}</td>

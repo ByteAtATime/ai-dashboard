@@ -5,31 +5,42 @@ import { type IApi } from '../interfaces/api.interface';
 import { DashboardRoutes } from './dashboard.routes';
 import { QueryRoutes } from './query.routes';
 import { DataSourceRoutes } from './datasource.routes';
+import type { User } from 'better-auth';
+
+export type AppEnv = {
+	Variables: {
+		user?: User;
+	};
+};
 
 @injectable()
 export class Api implements IApi {
-	private app: Hono;
+	private app: Hono<AppEnv>;
 
 	constructor(
 		private dashboardRoutes = inject(DashboardRoutes),
 		private queryRoutes = inject(QueryRoutes),
 		private dataSourceRoutes = inject(DataSourceRoutes)
 	) {
-		this.app = new Hono().basePath('/api');
+		this.app = new Hono<AppEnv>().basePath('/api');
 		this.setupRoutes();
 	}
 
 	private setupRoutes() {
+		this.app.use('*', async (c, next) => {
+			const session = await auth.api.getSession({ headers: c.req.raw.headers });
+			c.set('user', session?.user);
+
+			await next();
+		});
+
 		this.app.get('/', (c) => c.text('API Running'));
 		this.app.on(['POST', 'GET'], '/auth/**', (c) => auth.handler(c.req.raw));
 
-		// Mount dashboard routes
 		this.app.route('/dashboards', this.dashboardRoutes.routes());
 
-		// Mount query routes
 		this.app.route('/query', this.queryRoutes.routes());
 
-		// Mount data source routes
 		this.app.route('/datasources', this.dataSourceRoutes.routes());
 	}
 

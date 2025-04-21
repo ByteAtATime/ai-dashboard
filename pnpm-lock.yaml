@@ -26,6 +26,9 @@ importers:
       drizzle-orm:
         specifier: ^0.40.0
         version: 0.40.1(@types/pg@8.11.12)(gel@2.0.2)(kysely@0.27.6)(pg@8.14.1)(postgres@3.4.5)
+      drizzle-zod:
+        specifier: ^0.7.1
+        version: 0.7.1(drizzle-orm@0.40.1(@types/pg@8.11.12)(gel@2.0.2)(kysely@0.27.6)(pg@8.14.1)(postgres@3.4.5))(zod@3.24.3)
       hono:
         specifier: ^4.7.6
         version: 4.7.6
@@ -1641,6 +1644,12 @@ packages:
         optional: true
       sqlite3:
         optional: true
+
+  drizzle-zod@0.7.1:
+    resolution: {integrity: sha512-nZzALOdz44/AL2U005UlmMqaQ1qe5JfanvLujiTHiiT8+vZJTBFhj3pY4Vk+L6UWyKFfNmLhk602Hn4kCTynKQ==}
+    peerDependencies:
+      drizzle-orm: '>=0.36.0'
+      zod: '>=3.0.0'
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
@@ -4316,6 +4325,11 @@ snapshots:
       kysely: 0.27.6
       pg: 8.14.1
       postgres: 3.4.5
+
+  drizzle-zod@0.7.1(drizzle-orm@0.40.1(@types/pg@8.11.12)(gel@2.0.2)(kysely@0.27.6)(pg@8.14.1)(postgres@3.4.5))(zod@3.24.3):
+    dependencies:
+      drizzle-orm: 0.40.1(@types/pg@8.11.12)(gel@2.0.2)(kysely@0.27.6)(pg@8.14.1)(postgres@3.4.5)
+      zod: 3.24.3
 
   eastasianwidth@0.2.0: {}
 

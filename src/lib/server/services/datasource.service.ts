@@ -21,6 +21,20 @@ export class DataSourceService implements IDataSourceService {
 		return dataSource;
 	}
 
+	async getDataSourceById(dataSourceId: string, userId: string): Promise<DataSource | null> {
+		const dataSource = await this.repository.getById(dataSourceId);
+
+		if (!dataSource) {
+			return null;
+		}
+
+		if (dataSource.userId !== userId) {
+			throw new Error('User does not have access to this data source');
+		}
+
+		return dataSource;
+	}
+
 	async getDefaultForUser(userId: string): Promise<DataSource | null> {
 		return this.repository.getDefaultForUser(userId);
 	}

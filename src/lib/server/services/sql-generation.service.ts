@@ -42,7 +42,6 @@ export class SqlGenerationService implements ISqlGenerationService {
 					await progressCallback('Generating SQL query...');
 				}
 
-				// force tool call on the first turn for initial query so it samples data
 				const toolChoice =
 					messages.length <= 2
 						? { type: 'function' as const, function: { name: 'sampleTable' } }
@@ -108,7 +107,7 @@ export class SqlGenerationService implements ISqlGenerationService {
 					name: result.name
 				});
 			}
-			return null; // Continue the loop
+			return null;
 		} else if (message.content) {
 			return this.parseAIResponse(message.content, progressCallback);
 		}

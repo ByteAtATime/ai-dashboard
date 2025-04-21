@@ -3,7 +3,7 @@
 		data = [],
 		columns = {}
 	}: {
-		data: Record<string, any>[];
+		data: Record<string, unknown>[];
 		columns?: Record<string, string>;
 	} = $props();
 
@@ -38,7 +38,7 @@
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr>
-						{#each displayColumns as column}
+						{#each displayColumns as column (column)}
 							<th class="border-b border-gray-300 bg-gray-100 p-2 text-left font-semibold">
 								{getColumnTitle(column)}
 							</th>
@@ -46,9 +46,9 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each data as row}
+					{#each data as row (row.id)}
 						<tr class="hover:bg-gray-50">
-							{#each displayColumns as column}
+							{#each displayColumns as column (column)}
 								<td class="border-b border-gray-200 p-2">
 									{row[column] !== undefined ? row[column] : ''}
 								</td>

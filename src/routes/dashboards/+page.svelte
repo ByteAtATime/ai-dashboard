@@ -39,7 +39,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each dashboards as dashboard}
+					{#each dashboards as dashboard (dashboard.id)}
 						<Table.Row>
 							<Table.Cell class="font-medium">{dashboard.name}</Table.Cell>
 							<Table.Cell>{formatDate(dashboard.createdAt)}</Table.Cell>

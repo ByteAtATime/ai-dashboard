@@ -5,15 +5,18 @@
 	import { Label } from '$lib/components/ui/label';
 	import { goto } from '$app/navigation';
 	import { buttonVariants } from '$lib/components/ui/button';
+	import type { DisplayConfig } from '$lib/server/types/display.types';
 
 	let {
 		query,
 		display,
-		explanation
+		explanation,
+		dataSourceId
 	}: {
 		query: string;
-		display: any[];
+		display: DisplayConfig[];
 		explanation: string;
+		dataSourceId: string;
 	} = $props();
 
 	// State
@@ -41,7 +44,8 @@
 				body: JSON.stringify({
 					name,
 					query,
-					display,
+					items: display.map((item) => ({ ...item, layout: item, id: undefined })),
+					dataSourceId,
 					explanation
 				})
 			});

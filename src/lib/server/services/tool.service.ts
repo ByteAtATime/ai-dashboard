@@ -84,14 +84,11 @@ export class ToolService {
 	}
 
 	private sanitizeToolCallArguments(argsString: string): string {
-		// explanation: for some reason, mistral models are horrible at function calling
-		// sometimes, they return arguments like `{"tableName": "users", "numRows": 5{"tableName": "users", "numRows": 5}``
-		// either way, i have no idea what i am doing here
 		if (argsString.includes('}{') || argsString.match(/\d+\{/)) {
 			try {
 				JSON.parse(argsString);
 				return argsString;
-			} catch (error) {
+			} catch {
 				const openBraces = argsString.match(/{/g)?.length || 0;
 				const closeBraces = argsString.match(/}/g)?.length || 0;
 
@@ -104,7 +101,9 @@ export class ToolService {
 						try {
 							JSON.parse(fixed);
 							return fixed;
-						} catch {}
+						} catch {
+							// JSON.parse failed
+						}
 					}
 				}
 
@@ -114,7 +113,9 @@ export class ToolService {
 					try {
 						JSON.parse(secondHalf);
 						return secondHalf;
-					} catch {}
+					} catch {
+						// JSON.parse failed
+					}
 				}
 
 				if (argsString.includes('}{')) {
@@ -124,7 +125,9 @@ export class ToolService {
 					try {
 						JSON.parse(fixedSecondPart);
 						return fixedSecondPart;
-					} catch {}
+					} catch {
+						// JSON.parse failed
+					}
 				}
 
 				const jsonPattern = /{[^{}]*}/;
@@ -133,7 +136,9 @@ export class ToolService {
 					try {
 						JSON.parse(match[0]);
 						return match[0];
-					} catch {}
+					} catch {
+						// JSON.parse failed
+					}
 				}
 			}
 		}

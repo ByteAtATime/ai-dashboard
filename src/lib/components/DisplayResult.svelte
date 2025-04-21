@@ -12,16 +12,16 @@
 	import { Separator } from './ui/separator';
 
 	type Props = {
-		displayConfigs: (DisplayConfig & { results: any[] })[];
+		displayConfigs: (DisplayConfig & { results: Record<string, unknown>[] })[];
 	};
 
 	let { displayConfigs }: Props = $props();
 </script>
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-	{#each displayConfigs as config, i}
+	{#each displayConfigs as config, i (i)}
 		{#if config.type === 'table'}
-			{@const tableConfig = config as TableDisplay & { results: any[] }}
+			{@const tableConfig = config as TableDisplay & { results: Record<string, unknown>[] }}
 			<Card.Root class="overflow-hidden lg:col-span-12">
 				{#if tableConfig.description}
 					<Card.Header class="py-3">
@@ -34,7 +34,7 @@
 				</div>
 			</Card.Root>
 		{:else if config.type === 'stat'}
-			{@const statConfig = config as StatDisplay & { results: any[] }}
+			{@const statConfig = config as StatDisplay & { results: Record<string, unknown>[] }}
 			<!-- Passing individual props expected by StatsCard -->
 			<StatsCard
 				data={statConfig.results}
@@ -51,7 +51,11 @@
 				</Card.Content>
 			</Card.Root>
 		{:else}
-			{@const unknownConfig = config as { type: string; description?: string; results?: any[] }}
+			{@const unknownConfig = config as {
+				type: string;
+				description?: string;
+				results?: Record<string, unknown>[];
+			}}
 			<!-- Fallback for unknown types -->
 			<Card.Root class="lg:col-span-12">
 				<Card.Header>

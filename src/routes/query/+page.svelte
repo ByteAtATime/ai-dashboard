@@ -5,8 +5,10 @@
 	import { onMount } from 'svelte';
 	import QueryForm from '$lib/components/QueryForm.svelte';
 	import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
-	import SqlDisplay from '$lib/components/SqlDisplay.svelte';
 	import DisplayResult from '$lib/components/DisplayResult.svelte';
+
+	const { data } = $props();
+	const { mockData } = $derived(data);
 
 	type DataSource = {
 		id: string;
@@ -17,20 +19,29 @@
 
 	let dataSources = $state<DataSource[]>([]);
 	let selectedDataSourceId = $state('');
-	let dataSourcesLoading = $state(false);
-	let dataSourcesError = $state('');
 
 	let isLoading = $state(false);
 	let error = $state('');
-	let displayConfigs = $state<(DisplayConfig & { results: any[] })[]>([]);
+	let displayConfigs = $state<(DisplayConfig & { results: Record<string, unknown>[] })[]>([]);
 	let progressMessages = $state<string[]>([]);
-	let sqls = $state<string[]>([]);
 	let showSql = $state(false);
 	let currentStep = $state('');
+	let query = $state('');
+	let isUsingMockData = $state(false);
 
 	onMount(async () => {
+		if (mockData) {
+			console.log('Using mock data from environment variable');
+			isUsingMockData = true;
+			displayConfigs = mockData.display || [];
+			query = mockData.query || '';
+			selectedDataSourceId = mockData.dataSourceId || '';
+			isLoading = false;
+			return; // Don't fetch datasources if using mock data
+		}
+
+		// Fetch real datasources if not using mock data
 		try {
-			dataSourcesLoading = true;
 			const response = await fetch('/api/datasources');
 			if (!response.ok) throw new Error('Failed to fetch data sources');
 
@@ -41,16 +52,12 @@
 				selectedDataSourceId = defaultSource.id;
 			}
 		} catch (err) {
-			dataSourcesError = err instanceof Error ? err.message : 'Failed to load data sources';
 			console.error('Error loading data sources:', err);
-		} finally {
-			dataSourcesLoading = false;
 		}
 	});
 
 	function resetQuery() {
 		displayConfigs = [];
-		sqls = [];
 		error = '';
 		progressMessages = [];
 		showSql = false;
@@ -71,13 +78,21 @@
 		</p>
 	</header>
 
+	{#if isUsingMockData}
+		<Alert variant="default" class="mb-6">
+			<span class="font-semibold">Using Mock Data:</span> Displaying results from the
+			<code>MOCK_QUERY_RESULT</code> environment variable.
+		</Alert>
+	{/if}
+
 	<QueryForm
 		bind:isLoading
 		bind:error
 		bind:displayConfigs
 		bind:progressMessages
-		bind:sqls
 		bind:currentStep
+		bind:query
+		bind:selectedDataSourceId
 		{resetQuery}
 		{toggleSql}
 		{showSql}
@@ -91,10 +106,6 @@
 
 	{#if isLoading}
 		<LoadingIndicator {currentStep} {progressMessages} />
-	{/if}
-
-	{#if sqls.length > 0 && showSql}
-		<SqlDisplay {sqls} />
 	{/if}
 
 	{#if displayConfigs.length > 0}

@@ -18,7 +18,7 @@
 			<span class="font-medium">{currentStep}</span>
 		</div>
 
-		{#each progressMessages as message}
+		{#each progressMessages as message (message)}
 			<div>{message}</div>
 		{/each}
 	</Card.Content>

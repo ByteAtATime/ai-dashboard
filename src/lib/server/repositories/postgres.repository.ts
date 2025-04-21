@@ -8,7 +8,7 @@ import { type IRepository } from '../interfaces/repository.interface';
 @injectable()
 export class PostgresRepository implements IRepository {
 	private schemaCache: DatabaseSchema | null = null;
-	private readonly CACHE_TTL_MS = 3600000; // 1 hour
+	private readonly CACHE_TTL_MS = 3600000;
 	private pools: Map<string, Pool> = new Map();
 
 	private getPool(connectionString: string): Pool {
@@ -35,7 +35,6 @@ export class PostgresRepository implements IRepository {
 			return this.schemaCache;
 		}
 
-		// Get the appropriate connection pool
 		const pool = this.getPool(connectionString);
 		const client = await pool.connect();
 		try {
@@ -50,7 +49,6 @@ export class PostgresRepository implements IRepository {
 				lastUpdated: Date.now()
 			};
 
-			// Only cache if using the default connection
 			if (!connectionString) {
 				this.schemaCache = schema;
 			}
@@ -66,7 +64,6 @@ export class PostgresRepository implements IRepository {
 		connectionString: string,
 		params: unknown[] = []
 	): Promise<Record<string, unknown>[]> {
-		// Get the appropriate connection pool
 		const pool = this.getPool(connectionString);
 		const client = await pool.connect();
 
@@ -86,7 +83,7 @@ export class PostgresRepository implements IRepository {
 		connectionString: string
 	): Promise<Record<string, unknown>[]> {
 		console.log(`🔍 Sampling table: ${tableName}, ${numRows} rows`);
-		// Get the appropriate connection pool
+
 		const pool = this.getPool(connectionString);
 		const client = await pool.connect();
 		try {
