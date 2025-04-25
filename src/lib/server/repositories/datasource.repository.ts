@@ -8,9 +8,9 @@ import type { DataSource } from '../types/datasource.types';
 
 @injectable()
 export class DataSourceRepository implements IDataSourceRepository {
-	async getAllForUser(userId: string): Promise<DataSource[]> {
+	async getAllForOrganization(organizationId: string): Promise<DataSource[]> {
 		return db.query.dataSources.findMany({
-			where: eq(dataSources.userId, userId)
+			where: eq(dataSources.organizationId, organizationId)
 		});
 	}
 
@@ -21,36 +21,20 @@ export class DataSourceRepository implements IDataSourceRepository {
 		return results[0] || null;
 	}
 
-	async getDefaultForUser(userId: string): Promise<DataSource | null> {
-		const results = await db.query.dataSources.findMany({
-			where: (dataSources) => {
-				return eq(dataSources.userId, userId) && eq(dataSources.isDefault, true);
-			}
-		});
-		return results[0] || null;
-	}
-
 	async create(data: {
 		userId: string;
+		organizationId: string;
 		name: string;
 		connectionString: string;
-		isDefault?: boolean;
 	}): Promise<DataSource | null> {
 		const id = randomUUID();
-
-		if (data.isDefault) {
-			await db
-				.update(dataSources)
-				.set({ isDefault: false })
-				.where(eq(dataSources.userId, data.userId) && eq(dataSources.isDefault, true));
-		}
 
 		await db.insert(dataSources).values({
 			id,
 			userId: data.userId,
+			organizationId: data.organizationId,
 			name: data.name,
 			connectionString: data.connectionString,
-			isDefault: data.isDefault ?? false,
 			createdAt: new Date(),
 			updatedAt: new Date()
 		});
@@ -63,19 +47,8 @@ export class DataSourceRepository implements IDataSourceRepository {
 		data: {
 			name?: string;
 			connectionString?: string;
-			isDefault?: boolean;
 		}
 	): Promise<DataSource | null> {
-		const dataSource = await this.getById(id);
-		if (!dataSource) return null;
-
-		if (data.isDefault) {
-			await db
-				.update(dataSources)
-				.set({ isDefault: false })
-				.where(eq(dataSources.userId, dataSource.userId) && eq(dataSources.isDefault, true));
-		}
-
 		await db
 			.update(dataSources)
 			.set({
@@ -88,11 +61,10 @@ export class DataSourceRepository implements IDataSourceRepository {
 	}
 
 	async delete(id: string): Promise<boolean> {
-		const dataSource = await this.getById(id);
-		if (!dataSource) return false;
-
-		await db.delete(dataSources).where(eq(dataSources.id, id));
-
-		return true;
+		const result = await db
+			.delete(dataSources)
+			.where(eq(dataSources.id, id))
+			.returning({ id: dataSources.id });
+		return result.length > 0;
 	}
 }

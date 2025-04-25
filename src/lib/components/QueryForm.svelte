@@ -1,17 +1,12 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Alert } from '$lib/components/ui/alert';
 	import SaveDashboard from '$lib/components/SaveDashboard.svelte';
 	import type { DisplayConfig } from '$lib/server/types/display.types';
+	import type { DataSource as BackendDataSource } from '$lib/server/types/datasource.types';
 
-	type DataSource = {
-		id: string;
-		name: string;
-		connectionString: string;
-		isDefault: boolean;
-	};
+	type DataSource = BackendDataSource;
 
 	type Props = {
 		isLoading: boolean;
@@ -21,6 +16,7 @@
 		progressMessages: string[];
 		currentStep: string;
 		selectedDataSourceId: string;
+		dataSources: DataSource[];
 		toggleSql: () => void;
 		resetQuery: () => void;
 		showSql: boolean;
@@ -35,36 +31,12 @@
 		progressMessages = $bindable(),
 		currentStep = $bindable(),
 		selectedDataSourceId = $bindable(),
+		dataSources,
 		toggleSql,
 		resetQuery,
 		showSql,
 		disabled = false
 	}: Props = $props();
-
-	// Internal state for the form
-	let dataSources = $state<DataSource[]>([]);
-	let dataSourcesLoading = $state(false);
-	let dataSourcesError = $state('');
-
-	onMount(async () => {
-		try {
-			dataSourcesLoading = true;
-			const response = await fetch('/api/datasources');
-			if (!response.ok) throw new Error('Failed to fetch data sources');
-
-			dataSources = await response.json();
-
-			if (dataSources.length > 0) {
-				const defaultSource = dataSources.find((ds) => ds.isDefault) || dataSources[0];
-				selectedDataSourceId = defaultSource.id;
-			}
-		} catch (err) {
-			dataSourcesError = err instanceof Error ? err.message : 'Failed to load data sources';
-			console.error('Error loading data sources:', err);
-		} finally {
-			dataSourcesLoading = false;
-		}
-	});
 
 	async function submitQuery() {
 		if (!query.trim()) {
@@ -149,7 +121,7 @@
 
 	function handleReset() {
 		query = '';
-		resetQuery(); // Call the parent's reset function
+		resetQuery();
 	}
 </script>
 
@@ -163,20 +135,17 @@
 		class="space-y-4"
 	>
 		<!-- Data Source Selector -->
-		{#if dataSourcesLoading}
-			<div class="text-muted-foreground text-sm">Loading data sources...</div>
-		{:else if dataSourcesError}
-			<Alert variant="destructive" class="mb-2">
-				<span>Error loading data sources: {dataSourcesError}</span>
-			</Alert>
-		{:else if dataSources.length === 0}
+		{#if dataSources.length === 0 && !disabled}
 			<Alert variant="destructive" class="mb-2">
 				<span
-					>No data sources available. <a href="/datasources" class="underline">Add a data source</a>
+					>No data sources available for the current organization. <a
+						href="/datasources"
+						class="underline">Add a data source</a
+					>
 					to continue.</span
 				>
 			</Alert>
-		{:else}
+		{:else if dataSources.length > 0}
 			<div class="grid gap-2">
 				<label for="dataSource" class="text-sm font-medium">Data Source</label>
 				<select
@@ -186,7 +155,7 @@
 					{disabled}
 				>
 					{#each dataSources as ds (ds.id)}
-						<option value={ds.id}>{ds.name}{ds.isDefault ? ' (Default)' : ''}</option>
+						<option value={ds.id}>{ds.name}</option>
 					{/each}
 				</select>
 			</div>

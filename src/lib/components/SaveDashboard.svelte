@@ -6,16 +6,15 @@
 	import { goto } from '$app/navigation';
 	import { buttonVariants } from '$lib/components/ui/button';
 	import type { DisplayConfig } from '$lib/server/types/display.types';
+	import { authClient } from '$lib/auth-client';
 
 	let {
 		query,
 		display,
-		explanation,
 		dataSourceId
 	}: {
 		query: string;
 		display: DisplayConfig[];
-		explanation: string;
 		dataSourceId: string;
 	} = $props();
 
@@ -24,6 +23,8 @@
 	let open = $state(false);
 	let isSaving = $state(false);
 	let errorMessage = $state('');
+
+	const organization = authClient.useActiveOrganization();
 
 	// Save dashboard to the server
 	async function saveDashboard() {
@@ -46,7 +47,7 @@
 					query,
 					items: display.map((item) => ({ ...item, layout: item, id: undefined })),
 					dataSourceId,
-					explanation
+					organizationId: $organization.data?.id
 				})
 			});
 

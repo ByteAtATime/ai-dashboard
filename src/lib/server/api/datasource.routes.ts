@@ -1,65 +1,60 @@
 import { inject, injectable } from '@needle-di/core';
 import { Hono } from 'hono';
 import { DataSourceService } from '../services/datasource.service';
+import type { AppEnv } from '.';
+import { ForbiddenError } from '../errors';
 
 @injectable()
 export class DataSourceRoutes {
-	private app: Hono;
+	private app: Hono<AppEnv>;
 
 	constructor(private dataSourceService = inject(DataSourceService)) {
 		this.app = new Hono();
 		this.setupRoutes();
 	}
 
-	private async getUserIdFromRequest(request: Request): Promise<string | null> {
-		try {
-			const { auth } = await import('../auth');
-			const sessionResult = await auth.api.getSession({ headers: request.headers });
-			if (sessionResult && sessionResult.user && sessionResult.user.id) {
-				return sessionResult.user.id;
-			}
-			return null;
-		} catch (error) {
-			console.error('Error getting user session:', error);
-			return null;
-		}
-	}
-
 	private setupRoutes() {
 		this.app.get('/', async (c) => {
-			const userId = await this.getUserIdFromRequest(c.req.raw);
+			const organizationId = c.var.user?.activeOrganizationId;
 
-			if (!userId) {
-				return c.json({ error: 'Unauthorized' }, 401);
+			if (!organizationId) {
+				return c.json({ error: 'No active organization selected' }, 403);
 			}
 
-			const dataSources = await this.dataSourceService.getAllForUser(userId);
+			const dataSources = await this.dataSourceService.getAllForOrganization(organizationId);
 			return c.json(dataSources);
 		});
 
 		this.app.get('/:id', async (c) => {
-			const userId = await this.getUserIdFromRequest(c.req.raw);
+			const organizationId = c.var.user?.activeOrganizationId;
 
-			if (!userId) {
-				return c.json({ error: 'Unauthorized' }, 401);
+			if (!organizationId) {
+				return c.json({ error: 'No active organization selected' }, 403);
 			}
 
 			const id = c.req.param('id');
-			const dataSource = await this.dataSourceService.getById(id, userId);
-
-			if (!dataSource) {
-				return c.json({ error: 'Data source not found or unauthorized' }, 404);
+			try {
+				const dataSource = await this.dataSourceService.getDataSourceById(id, organizationId);
+				return c.json(dataSource);
+			} catch (error) {
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Data source not found or unauthorized' }, 404);
+				}
+				console.error('Error fetching data source:', error);
+				return c.json({ error: 'Internal Server Error' }, 500);
 			}
-
-			return c.json(dataSource);
 		});
 
 		this.app.post('/', async (c) => {
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
+				const userId = c.var.user?.id;
+				const organizationId = c.var.user?.activeOrganizationId;
 
 				if (!userId) {
 					return c.json({ error: 'Unauthorized' }, 401);
+				}
+				if (!organizationId) {
+					return c.json({ error: 'No active organization selected' }, 403);
 				}
 
 				const body = await c.req.json();
@@ -72,34 +67,32 @@ export class DataSourceRoutes {
 					return c.json({ error: 'Connection string is required' }, 400);
 				}
 
-				const isDefault = body.isDefault === true;
-
 				const dataSource = await this.dataSourceService.create({
 					userId,
+					organizationId,
 					name: body.name,
-					connectionString: body.connectionString,
-					isDefault
+					connectionString: body.connectionString
 				});
 
 				return c.json(dataSource, 201);
 			} catch (error) {
 				console.error('Error creating data source:', error);
+				const statusCode = error instanceof ForbiddenError ? 403 : 500;
 				return c.json(
 					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
+						error: error instanceof Error ? error.message : 'Unknown error'
 					},
-					500
+					statusCode
 				);
 			}
 		});
 
 		this.app.put('/:id', async (c) => {
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
+				const organizationId = c.var.user?.activeOrganizationId;
 
-				if (!userId) {
-					return c.json({ error: 'Unauthorized' }, 401);
+				if (!organizationId) {
+					return c.json({ error: 'No active organization selected' }, 403);
 				}
 
 				const id = c.req.param('id');
@@ -108,27 +101,27 @@ export class DataSourceRoutes {
 				const updateData: {
 					name?: string;
 					connectionString?: string;
-					isDefault?: boolean;
 				} = {};
 
 				if (body.name !== undefined) updateData.name = body.name;
 				if (body.connectionString !== undefined)
 					updateData.connectionString = body.connectionString;
-				if (body.isDefault !== undefined) updateData.isDefault = body.isDefault;
 
-				const updatedDataSource = await this.dataSourceService.update(id, userId, updateData);
-
-				if (!updatedDataSource) {
-					return c.json({ error: 'Data source not found or unauthorized' }, 404);
-				}
+				const updatedDataSource = await this.dataSourceService.update(
+					id,
+					organizationId,
+					updateData
+				);
 
 				return c.json(updatedDataSource);
 			} catch (error) {
 				console.error('Error updating data source:', error);
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Data source not found or unauthorized' }, 404);
+				}
 				return c.json(
 					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
+						error: error instanceof Error ? error.message : 'Unknown error'
 					},
 					500
 				);
@@ -137,26 +130,24 @@ export class DataSourceRoutes {
 
 		this.app.delete('/:id', async (c) => {
 			try {
-				const userId = await this.getUserIdFromRequest(c.req.raw);
+				const organizationId = c.var.user?.activeOrganizationId;
 
-				if (!userId) {
-					return c.json({ error: 'Unauthorized' }, 401);
+				if (!organizationId) {
+					return c.json({ error: 'No active organization selected' }, 403);
 				}
 
 				const id = c.req.param('id');
-				const success = await this.dataSourceService.delete(id, userId);
-
-				if (!success) {
-					return c.json({ error: 'Data source not found or unauthorized' }, 404);
-				}
+				await this.dataSourceService.delete(id, organizationId);
 
 				return c.json({ success: true });
 			} catch (error) {
 				console.error('Error deleting data source:', error);
+				if (error instanceof ForbiddenError) {
+					return c.json({ error: 'Data source not found or unauthorized' }, 404);
+				}
 				return c.json(
 					{
-						error: error instanceof Error ? error.message : 'Unknown error',
-						status: 500
+						error: error instanceof Error ? error.message : 'Unknown error'
 					},
 					500
 				);

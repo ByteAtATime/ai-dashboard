@@ -20,19 +20,7 @@ import { PostgresDashboardRepository } from '../repositories/postgres.dashboard.
 import { PostgresDashboardItemRepository } from '../repositories/postgres.dashboard-item.repository';
 import { PostgresDashboardItemExecutionRepository } from '../repositories/postgres.dashboard-item-execution.repository';
 import { DataSourceService } from './datasource.service';
-
-class NotFoundError extends Error {
-	constructor(message = 'Resource not found') {
-		super(message);
-		this.name = 'NotFoundError';
-	}
-}
-class ForbiddenError extends Error {
-	constructor(message = 'Forbidden') {
-		super(message);
-		this.name = 'ForbiddenError';
-	}
-}
+import { NotFoundError, ForbiddenError } from '../errors';
 
 @injectable()
 export class DashboardService implements IDashboardService {
@@ -53,7 +41,6 @@ export class DashboardService implements IDashboardService {
 		}
 		const newPool = new pg.Pool({
 			connectionString,
-
 			ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 			query_timeout: 10000
 		});
@@ -61,17 +48,17 @@ export class DashboardService implements IDashboardService {
 		return newPool;
 	}
 
-	async getDashboardsForUser(userId: string): Promise<Dashboard[]> {
-		return this.dashboardRepo.findByUserId(userId);
+	async getDashboardsForOrganization(organizationId: string): Promise<Dashboard[]> {
+		return this.dashboardRepo.findByOrganizationId(organizationId);
 	}
 
-	async getDashboardById(dashboardId: string, userId: string): Promise<FullDashboard | null> {
+	async getDashboardById(
+		dashboardId: string,
+		organizationId: string
+	): Promise<FullDashboard | null> {
 		const dashboard = await this.dashboardRepo.findById(dashboardId);
 
-		if (!dashboard) {
-			return null;
-		}
-		if (dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User does not have access to this dashboard');
 		}
 
@@ -93,8 +80,10 @@ export class DashboardService implements IDashboardService {
 		};
 	}
 
-	async createDashboard(data: InsertFullDashboard): Promise<FullDashboard> {
-		await this.dataSourceService.getDataSourceById(data.dataSourceId, data.userId);
+	async createDashboard(
+		data: InsertFullDashboard & { organizationId: string }
+	): Promise<FullDashboard> {
+		await this.dataSourceService.getDataSourceById(data.dataSourceId, data.organizationId);
 
 		const newDashboard = await this.dashboardRepo.create(data);
 
@@ -119,14 +108,11 @@ export class DashboardService implements IDashboardService {
 
 	async updateDashboard(
 		dashboardId: string,
-		userId: string,
+		organizationId: string,
 		data: UpdateDashboard
 	): Promise<Dashboard | null> {
 		const dashboard = await this.dashboardRepo.findById(dashboardId);
-		if (!dashboard) {
-			throw new NotFoundError('Dashboard not found');
-		}
-		if (dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User cannot update this dashboard');
 		}
 
@@ -141,12 +127,9 @@ export class DashboardService implements IDashboardService {
 		return this.dashboardRepo.update(dashboardId, updateData);
 	}
 
-	async deleteDashboard(dashboardId: string, userId: string): Promise<boolean> {
+	async deleteDashboard(dashboardId: string, organizationId: string): Promise<boolean> {
 		const dashboard = await this.dashboardRepo.findById(dashboardId);
-		if (!dashboard) {
-			return false;
-		}
-		if (dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User cannot delete this dashboard');
 		}
 		return this.dashboardRepo.delete(dashboardId);
@@ -154,14 +137,11 @@ export class DashboardService implements IDashboardService {
 
 	async addDashboardItem(
 		dashboardId: string,
-		userId: string,
+		organizationId: string,
 		itemData: InsertDashboardItem
 	): Promise<DashboardItem> {
 		const dashboard = await this.dashboardRepo.findById(dashboardId);
-		if (!dashboard) {
-			throw new NotFoundError('Dashboard not found');
-		}
-		if (dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User cannot add items to this dashboard');
 		}
 
@@ -174,7 +154,7 @@ export class DashboardService implements IDashboardService {
 
 	async updateDashboardItem(
 		itemId: string,
-		userId: string,
+		organizationId: string,
 		itemData: UpdateDashboardItem
 	): Promise<DashboardItem | null> {
 		const item = await this.itemRepo.findById(itemId);
@@ -182,25 +162,28 @@ export class DashboardService implements IDashboardService {
 			throw new NotFoundError('Dashboard item not found');
 		}
 		const dashboard = await this.dashboardRepo.findById(item.dashboardId);
-		if (!dashboard || dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User cannot update this dashboard item');
 		}
 		return this.itemRepo.update(itemId, itemData);
 	}
 
-	async deleteDashboardItem(itemId: string, userId: string): Promise<boolean> {
+	async deleteDashboardItem(itemId: string, organizationId: string): Promise<boolean> {
 		const item = await this.itemRepo.findById(itemId);
 		if (!item) {
 			return false;
 		}
 		const dashboard = await this.dashboardRepo.findById(item.dashboardId);
-		if (!dashboard || dashboard.userId !== userId) {
+		if (!dashboard || dashboard.organizationId !== organizationId) {
 			throw new ForbiddenError('User cannot delete this dashboard item');
 		}
 		return this.itemRepo.delete(itemId);
 	}
 
-	async refreshDashboardItem(itemId: string, userId: string): Promise<DashboardItemExecution> {
+	async refreshDashboardItem(
+		itemId: string,
+		organizationId: string
+	): Promise<DashboardItemExecution> {
 		const itemResult = await this.itemRepo.findById(itemId);
 		if (!itemResult) {
 			throw new NotFoundError('Dashboard item not found');
@@ -209,21 +192,16 @@ export class DashboardService implements IDashboardService {
 		const item = itemResult as DashboardItem;
 
 		const dashboard = await this.dashboardRepo.findById(item.dashboardId);
-		if (!dashboard) {
-			throw new NotFoundError('Parent dashboard not found for item');
-		}
-		if (dashboard.userId !== userId) {
-			throw new ForbiddenError('User cannot refresh this dashboard item');
+		if (!dashboard || dashboard.organizationId !== organizationId) {
+			throw new ForbiddenError('User cannot refresh this dashboard item (dashboard access)');
 		}
 
 		const dataSource = await this.dataSourceService.getDataSourceById(
 			dashboard.dataSourceId,
-			userId
+			organizationId
 		);
 		if (!dataSource) {
-			throw new NotFoundError(
-				`Datasource with ID ${dashboard.dataSourceId} not found or not accessible by user.`
-			);
+			throw new NotFoundError('Datasource not found or not accessible by user.');
 		}
 		const connectionString = dataSource.connectionString;
 
@@ -248,40 +226,25 @@ export class DashboardService implements IDashboardService {
 
 			await client.query('COMMIT');
 
-			const updatedSuccessExecution = await this.executionRepo.update(initialExecution.id, {
+			finalExecution = await this.executionRepo.update(initialExecution.id, {
 				status: 'success',
-				results: { data: result.rows }
+				results: result.rows
 			});
-			if (!updatedSuccessExecution) {
-				console.error(`Failed to update execution ${initialExecution.id} to success status.`);
-				finalExecution = initialExecution;
-			} else {
-				finalExecution = updatedSuccessExecution;
-			}
 		} catch (error: unknown) {
 			if (client) {
 				await client.query('ROLLBACK');
 			}
-			console.error(`Error executing query for item ${itemId}:`, error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown execution error';
-			const updatedErrorExecution = await this.executionRepo.update(initialExecution.id, {
+			finalExecution = await this.executionRepo.update(initialExecution.id, {
 				status: 'failed',
 				errorMessage: errorMessage
 			});
-			if (!updatedErrorExecution) {
-				console.error(`Failed to update execution ${initialExecution.id} to error status.`);
-				finalExecution = initialExecution;
-			} else {
-				finalExecution = updatedErrorExecution;
-			}
 		} finally {
-			if (client) {
-				client.release();
-			}
+			client?.release();
 		}
 
 		if (!finalExecution) {
-			throw new Error(`Execution record ${initialExecution.id} could not be retrieved.`);
+			throw new Error('Failed to update execution status after query.');
 		}
 
 		return finalExecution;

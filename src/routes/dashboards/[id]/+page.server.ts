@@ -1,26 +1,43 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { auth } from '$lib/server/auth';
+import { DashboardService } from '$lib/server/services/dashboard.service';
+import { Container } from '@needle-di/core';
+import { ForbiddenError } from '$lib/server/errors';
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, request }) => {
 	const { id } = params;
 
 	if (!id) {
-		throw error(404, 'Dashboard not found');
+		error(404, 'Dashboard ID is required');
 	}
 
-	const res = await fetch(`/api/dashboards/${id}`);
-
-	if (!res.ok) {
-		throw error(res.status, 'Failed to fetch dashboard');
+	const session = await auth.api.getSession({ headers: request.headers });
+	if (!session?.user) {
+		redirect(302, '/login');
 	}
 
-	const dashboard = await res.json();
-
-	if (!dashboard || dashboard.error) {
-		throw error(res.status, dashboard.error);
+	const organizationId = session.session?.activeOrganizationId;
+	if (!organizationId) {
+		error(500, 'No active organization found for the session.');
 	}
 
-	return {
-		dashboard
-	};
+	try {
+		const dashboardService = new Container().get(DashboardService);
+		const dashboard = await dashboardService.getDashboardById(id, organizationId);
+
+		if (!dashboard) {
+			error(404, 'Dashboard not found or not accessible.');
+		}
+
+		return {
+			dashboard
+		};
+	} catch (err) {
+		if (err instanceof ForbiddenError) {
+			error(404, 'Dashboard not found or not accessible.');
+		}
+		console.error(`Error loading dashboard ${id} in +page.server.ts:`, err);
+		error(500, 'Failed to load dashboard.');
+	}
 };

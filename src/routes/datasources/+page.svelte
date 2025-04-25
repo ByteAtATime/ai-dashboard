@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	// Removed onMount, fetch happens in load or $effect
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import {
 		Card,
@@ -27,39 +27,49 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	// Checkbox removed
 
+	// Updated DataSource type
 	type DataSource = {
 		id: string;
+		userId: string; // Keep track of creator if needed, though maybe not displayed
+		organizationId: string; // Added
 		name: string;
 		connectionString: string;
-		isDefault: boolean;
+		// isDefault removed
 		createdAt: string;
 		updatedAt: string;
 	};
 
-	let dataSources: DataSource[] = [];
-	let loading = true;
-	let error = '';
+	// Use $state for reactive variables
+	let dataSources = $state<DataSource[]>([]);
+	let loading = $state(true);
+	let error = $state('');
 
-	// Form data
-	let name = '';
-	let connectionString = '';
-	let isDefault = false;
-	let isDialogOpen = false;
-	let isSubmitting = false;
+	// Form data using $state
+	let name = $state('');
+	let connectionString = $state('');
+	// isDefault removed
+	let isDialogOpen = $state(false);
+	let isSubmitting = $state(false);
 
-	// Load data sources on mount
-	onMount(async () => {
-		try {
-			const response = await fetch('/api/datasources');
-			if (!response.ok) throw new Error('Failed to fetch data sources');
-			dataSources = await response.json();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load data sources';
-		} finally {
-			loading = false;
-		}
+	// Load data sources using $effect (runs on mount and potentially later if needed)
+	$effect(() => {
+		// Wrap async logic in a self-invoking function to return void
+		(async () => {
+			loading = true;
+			error = '';
+			try {
+				const response = await fetch('/api/datasources'); // Endpoint remains the same
+				if (!response.ok) throw new Error('Failed to fetch data sources');
+				dataSources = await response.json();
+			} catch (err) {
+				error = err instanceof Error ? err.message : 'Failed to load data sources';
+				dataSources = []; // Clear data on error
+			} finally {
+				loading = false;
+			}
+		})(); // Immediately invoke the async function
 	});
 
 	// Add new data source
@@ -67,11 +77,13 @@
 		if (!name || !connectionString) return;
 
 		isSubmitting = true;
+		error = '';
 		try {
 			const response = await fetch('/api/datasources', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, connectionString, isDefault })
+				// Remove isDefault from body
+				body: JSON.stringify({ name, connectionString })
 			});
 
 			if (!response.ok) {
@@ -80,12 +92,13 @@
 			}
 
 			const newDataSource = await response.json();
-			dataSources = [...dataSources, newDataSource];
+			// Svelte 5 reactivity handles the update automatically if `dataSources` is mutated
+			dataSources.push(newDataSource);
 
 			// Reset form
 			name = '';
 			connectionString = '';
-			isDefault = false;
+			// isDefault removed
 			isDialogOpen = false;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create data source';
@@ -95,6 +108,7 @@
 	}
 
 	async function deleteDataSource(id: string) {
+		error = '';
 		try {
 			const response = await fetch(`/api/datasources/${id}`, {
 				method: 'DELETE'
@@ -102,6 +116,7 @@
 
 			if (!response.ok) throw new Error('Failed to delete data source');
 
+			// Filter the array, reactivity handles the UI update
 			dataSources = dataSources.filter((ds) => ds.id !== id);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to delete data source';
@@ -118,7 +133,9 @@
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>Add Data Source</DialogTitle>
-					<DialogDescription>Add a new database connection.</DialogDescription>
+					<DialogDescription
+						>Add a new database connection for the current organization.</DialogDescription
+					>
 				</DialogHeader>
 
 				<div class="grid gap-4 py-4">
@@ -134,15 +151,12 @@
 							placeholder="postgresql://user:password@localhost:5432/db"
 						/>
 					</div>
-					<div class="flex items-center space-x-2">
-						<Checkbox id="isDefault" bind:checked={isDefault} />
-						<Label for="isDefault">Set as default</Label>
-					</div>
+					<!-- Default checkbox removed -->
 				</div>
 
 				<DialogFooter>
 					<Button variant="outline" onclick={() => (isDialogOpen = false)}>Cancel</Button>
-					<Button disabled={isSubmitting} onclick={addDataSource}>
+					<Button disabled={isSubmitting || !name || !connectionString} onclick={addDataSource}>
 						{isSubmitting ? 'Adding...' : 'Add Data Source'}
 					</Button>
 				</DialogFooter>
@@ -151,7 +165,7 @@
 	</div>
 
 	{#if error}
-		<div class="mb-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
+		<div class="mb-4 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700" role="alert">
 			{error}
 		</div>
 	{/if}
@@ -159,37 +173,42 @@
 	<Card>
 		<CardHeader>
 			<CardTitle>Your Data Sources</CardTitle>
-			<CardDescription>Manage your database connections</CardDescription>
+			<CardDescription>Database connections for the current organization</CardDescription>
 		</CardHeader>
 		<CardContent>
 			{#if loading}
 				<div class="py-4 text-center">Loading...</div>
 			{:else if dataSources.length === 0}
 				<div class="text-muted-foreground py-4 text-center">
-					No data sources found. Add your first database connection.
+					No data sources found for this organization. Add your first connection.
 				</div>
 			{:else}
 				<Table>
 					<TableHeader>
 						<TableRow>
 							<TableHead>Name</TableHead>
-							<TableHead>Connection String</TableHead>
-							<TableHead>Default</TableHead>
+							<TableHead>Connection String (Partial)</TableHead>
+							<!-- Default column removed -->
 							<TableHead class="text-right">Actions</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
 						{#each dataSources as ds (ds.id)}
 							<TableRow>
-								<TableCell>{ds.name}</TableCell>
+								<TableCell class="font-medium">{ds.name}</TableCell>
 								<TableCell>
-									<div class="max-w-md truncate">
-										{ds.connectionString}
+									<div class="max-w-md truncate" title={ds.connectionString}>
+										{ds.connectionString.split('@')[0]}@... <!-- Show only user part -->
 									</div>
 								</TableCell>
-								<TableCell>{ds.isDefault ? 'Yes' : 'No'}</TableCell>
+								<!-- Default cell removed -->
 								<TableCell class="text-right">
-									<Button variant="destructive" size="sm" onclick={() => deleteDataSource(ds.id)}>
+									<Button
+										variant="ghost"
+										size="sm"
+										class="text-red-500 hover:text-red-700"
+										onclick={() => deleteDataSource(ds.id)}
+									>
 										Delete
 									</Button>
 								</TableCell>

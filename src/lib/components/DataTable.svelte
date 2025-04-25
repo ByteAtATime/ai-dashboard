@@ -46,7 +46,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each data as row (row.id)}
+					{#each data as row}
 						<tr class="hover:bg-gray-50">
 							{#each displayColumns as column (column)}
 								<td class="border-b border-gray-200 p-2">

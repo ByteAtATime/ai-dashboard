@@ -1,24 +1,25 @@
 <script lang="ts">
 	import type { DisplayConfig } from '$lib/server/types/display.types';
+	import type { DataSource as BackendDataSource } from '$lib/server/types/datasource.types';
 
 	import { Alert } from '$lib/components/ui/alert';
-	import { onMount } from 'svelte';
 	import QueryForm from '$lib/components/QueryForm.svelte';
 	import LoadingIndicator from '$lib/components/LoadingIndicator.svelte';
 	import DisplayResult from '$lib/components/DisplayResult.svelte';
 
-	const { data } = $props();
-	const { mockData } = $derived(data);
-
-	type DataSource = {
-		id: string;
-		name: string;
-		connectionString: string;
-		isDefault: boolean;
+	type PageData = {
+		mockData: unknown;
+		dataSources: BackendDataSource[];
 	};
+	const { data } = $props<{ data: PageData }>();
+	const { mockData, dataSources: initialDataSources } = $derived(data);
 
-	let dataSources = $state<DataSource[]>([]);
-	let selectedDataSourceId = $state('');
+	type DataSource = BackendDataSource;
+
+	let dataSources = $state<DataSource[]>(initialDataSources || []);
+	let selectedDataSourceId = $state(
+		initialDataSources && initialDataSources.length > 0 ? initialDataSources[0].id : ''
+	);
 
 	let isLoading = $state(false);
 	let error = $state('');
@@ -29,30 +30,20 @@
 	let query = $state('');
 	let isUsingMockData = $state(false);
 
-	onMount(async () => {
+	$effect(() => {
 		if (mockData) {
 			console.log('Using mock data from environment variable');
 			isUsingMockData = true;
 			displayConfigs = mockData.display || [];
 			query = mockData.query || '';
-			selectedDataSourceId = mockData.dataSourceId || '';
-			isLoading = false;
-			return; // Don't fetch datasources if using mock data
-		}
-
-		// Fetch real datasources if not using mock data
-		try {
-			const response = await fetch('/api/datasources');
-			if (!response.ok) throw new Error('Failed to fetch data sources');
-
-			dataSources = await response.json();
-
-			if (dataSources.length > 0) {
-				const defaultSource = dataSources.find((ds) => ds.isDefault) || dataSources[0];
-				selectedDataSourceId = defaultSource.id;
+			if (mockData.dataSourceId) {
+				selectedDataSourceId = mockData.dataSourceId;
 			}
-		} catch (err) {
-			console.error('Error loading data sources:', err);
+			isLoading = false;
+		} else {
+			isUsingMockData = false;
+			selectedDataSourceId =
+				initialDataSources && initialDataSources.length > 0 ? initialDataSources[0].id : '';
 		}
 	});
 
@@ -93,6 +84,7 @@
 		bind:currentStep
 		bind:query
 		bind:selectedDataSourceId
+		{dataSources}
 		{resetQuery}
 		{toggleSql}
 		{showSql}

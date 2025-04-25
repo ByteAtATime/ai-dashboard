@@ -16,15 +16,15 @@ export class PostgresDashboardRepository implements IDashboardRepository {
 		return result[0] ?? null;
 	}
 
-	async findByUserId(userId: string): Promise<Dashboard[]> {
+	async findByOrganizationId(organizationId: string): Promise<Dashboard[]> {
 		return db
 			.select()
 			.from(schema.dashboards)
-			.where(eq(schema.dashboards.userId, userId))
+			.where(eq(schema.dashboards.organizationId, organizationId))
 			.orderBy(desc(schema.dashboards.createdAt));
 	}
 
-	async create(data: InsertDashboard): Promise<Dashboard> {
+	async create(data: InsertDashboard & { organizationId: string }): Promise<Dashboard> {
 		const [newDashboard] = await db
 			.insert(schema.dashboards)
 			.values({

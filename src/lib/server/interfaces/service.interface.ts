@@ -1,23 +1,22 @@
 import type { DataSource } from '../types/datasource.types';
 
 export interface IDataSourceService {
-	getAllForUser(userId: string): Promise<DataSource[]>;
-	getById(id: string, userId: string): Promise<DataSource | null>;
-	getDefaultForUser(userId: string): Promise<DataSource | null>;
+	getAllForOrganization(organizationId: string): Promise<DataSource[]>;
+	getById(id: string, organizationId: string): Promise<DataSource | null>;
+	getDataSourceById(dataSourceId: string, organizationId: string): Promise<DataSource | null>;
 	create(data: {
 		userId: string;
+		organizationId: string;
 		name: string;
 		connectionString: string;
-		isDefault?: boolean;
 	}): Promise<DataSource | null>;
 	update(
 		id: string,
-		userId: string,
+		organizationId: string,
 		data: {
 			name?: string;
 			connectionString?: string;
-			isDefault?: boolean;
 		}
 	): Promise<DataSource | null>;
-	delete(id: string, userId: string): Promise<boolean>;
+	delete(id: string, organizationId: string): Promise<boolean>;
 }

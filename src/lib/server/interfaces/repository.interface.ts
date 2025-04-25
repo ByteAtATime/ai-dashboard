@@ -16,21 +16,19 @@ export interface IRepository {
 }
 
 export interface IDataSourceRepository {
-	getAllForUser(userId: string): Promise<DataSource[]>;
+	getAllForOrganization(organizationId: string): Promise<DataSource[]>;
 	getById(id: string): Promise<DataSource | null>;
-	getDefaultForUser(userId: string): Promise<DataSource | null>;
 	create(data: {
 		userId: string;
+		organizationId: string;
 		name: string;
 		connectionString: string;
-		isDefault?: boolean;
 	}): Promise<DataSource | null>;
 	update(
 		id: string,
 		data: {
 			name?: string;
 			connectionString?: string;
-			isDefault?: boolean;
 		}
 	): Promise<DataSource | null>;
 	delete(id: string): Promise<boolean>;

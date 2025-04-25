@@ -9,7 +9,9 @@ import type { User } from 'better-auth';
 
 export type AppEnv = {
 	Variables: {
-		user?: User;
+		user?: User & {
+			activeOrganizationId?: string | null;
+		};
 	};
 };
 
@@ -29,13 +31,18 @@ export class Api implements IApi {
 	private setupRoutes() {
 		this.app.use('*', async (c, next) => {
 			const session = await auth.api.getSession({ headers: c.req.raw.headers });
-			c.set('user', session?.user);
+			c.set(
+				'user',
+				session
+					? { ...session.user, activeOrganizationId: session.session.activeOrganizationId }
+					: undefined
+			);
 
 			await next();
 		});
 
 		this.app.get('/', (c) => c.text('API Running'));
-		this.app.on(['POST', 'GET'], '/auth/**', (c) => auth.handler(c.req.raw));
+		this.app.on(['POST', 'GET'], ['/auth/:rest{.*}'], (c) => auth.handler(c.req.raw));
 
 		this.app.route('/dashboards', this.dashboardRoutes.routes());
 
