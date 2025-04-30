@@ -42,6 +42,7 @@ export class Api implements IApi {
 		});
 
 		this.app.get('/', (c) => c.text('API Running'));
+		// @ts-expect-error -- TODO: why does it not recognize the `handler` method?
 		this.app.on(['POST', 'GET'], ['/auth/:rest{.*}'], (c) => auth.handler(c.req.raw));
 
 		this.app.route('/dashboards', this.dashboardRoutes.routes());

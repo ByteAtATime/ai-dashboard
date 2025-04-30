@@ -114,7 +114,7 @@
 								displayConfigs={[{ ...itemLayout, results: latestExecution.results }]}
 							/>
 							<p class="text-muted-foreground mt-2 text-xs">
-								Executed: {formatDate(latestExecution.createdAt)}
+								Executed: {formatDate(latestExecution.executedAt)}
 							</p>
 						{:else}
 							<p class="text-muted-foreground text-sm">This item has not been executed yet.</p>

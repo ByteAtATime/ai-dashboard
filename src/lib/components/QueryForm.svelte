@@ -177,12 +177,7 @@
 				<Button type="button" onclick={toggleSql} variant="outline" {disabled}>
 					{showSql ? 'Hide SQL' : 'Show SQL'}
 				</Button>
-				<SaveDashboard
-					{query}
-					display={displayConfigs}
-					explanation=""
-					dataSourceId={selectedDataSourceId}
-				/>
+				<SaveDashboard {query} display={displayConfigs} dataSourceId={selectedDataSourceId} />
 			{/if}
 
 			<a
