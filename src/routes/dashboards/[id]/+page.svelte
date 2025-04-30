@@ -111,7 +111,7 @@
 					<Card.Content>
 						{#if latestExecution}
 							<DisplayResult
-								displayConfigs={[{ ...itemLayout, results: latestExecution.results.data }]}
+								displayConfigs={[{ ...itemLayout, results: latestExecution.results }]}
 							/>
 							<p class="text-muted-foreground mt-2 text-xs">
 								Executed: {formatDate(latestExecution.createdAt)}

@@ -28,7 +28,7 @@
 	}
 </script>
 
-<div class="my-4 w-full">
+<div class="w-full">
 	{#if data.length === 0}
 		<div class="rounded-md border border-dashed border-gray-300 p-8 text-center text-gray-600">
 			No data available

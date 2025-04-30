@@ -7,6 +7,7 @@
 	import { buttonVariants } from '$lib/components/ui/button';
 	import type { DisplayConfig } from '$lib/server/types/display.types';
 	import { authClient } from '$lib/auth-client';
+	import { toast } from 'svelte-sonner';
 
 	let {
 		query,
@@ -58,6 +59,11 @@
 
 			const result = await response.json();
 
+			// Show success message with execution results if available
+			if (result.message) {
+				toast.success(result.message);
+			}
+
 			open = false;
 			goto(`/dashboards/${result.dashboard.id}`);
 		} catch (error) {
@@ -77,7 +83,8 @@
 		<Dialog.Header>
 			<Dialog.Title>Save Dashboard</Dialog.Title>
 			<Dialog.Description>
-				Give your dashboard a name to save it for future reference.
+				Give your dashboard a name to save it for future reference. All visualizations will be
+				automatically executed.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -95,7 +102,7 @@
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
 			<Button onclick={saveDashboard} disabled={isSaving}>
-				{isSaving ? 'Saving...' : 'Save'}
+				{isSaving ? 'Saving & Executing...' : 'Save'}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

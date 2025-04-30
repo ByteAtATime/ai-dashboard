@@ -83,7 +83,13 @@ export class DashboardService implements IDashboardService {
 	async createDashboard(
 		data: InsertFullDashboard & { organizationId: string }
 	): Promise<FullDashboard> {
-		await this.dataSourceService.getDataSourceById(data.dataSourceId, data.organizationId);
+		const dataSource = await this.dataSourceService.getDataSourceById(
+			data.dataSourceId,
+			data.organizationId
+		);
+		if (!dataSource) {
+			throw new NotFoundError('Datasource not found or not accessible by user.');
+		}
 
 		const newDashboard = await this.dashboardRepo.create(data);
 
@@ -100,10 +106,77 @@ export class DashboardService implements IDashboardService {
 				)
 			: [];
 
+		// Automatically execute all items with their SQL query
+		const itemsWithLatestExecution = await Promise.all(
+			createdItems.map(async (item) => {
+				if (item.sql) {
+					try {
+						const execution = await this.executeItemQuery(item.id, dataSource.connectionString);
+						return { ...item, latestExecution: execution };
+					} catch (error) {
+						console.error(`Error auto-executing item ${item.id}:`, error);
+						return { ...item, latestExecution: null };
+					}
+				}
+				return { ...item, latestExecution: null };
+			})
+		);
+
 		return {
 			...newDashboard,
-			items: createdItems.map((item) => ({ ...item, latestExecution: null }))
+			items: itemsWithLatestExecution
 		};
+	}
+
+	// Add a helper method to execute the query for a dashboard item
+	private async executeItemQuery(
+		itemId: string,
+		connectionString: string
+	): Promise<DashboardItemExecution | null> {
+		const item = await this.itemRepo.findById(itemId);
+		if (!item || !item.sql) {
+			return null;
+		}
+
+		const initialExecution = await this.executionRepo.create({
+			dashboardItemId: itemId,
+			status: 'pending',
+			executedAt: new Date(),
+			results: null,
+			errorMessage: null
+		});
+		let finalExecution: DashboardItemExecution | null = initialExecution;
+
+		let client: pg.PoolClient | null = null;
+		try {
+			const pool = this.getQueryPool(connectionString);
+			client = await pool.connect();
+
+			await client.query('BEGIN TRANSACTION READ ONLY');
+			await client.query('SET statement_timeout = 10000');
+
+			const result = await client.query(item.sql);
+
+			await client.query('COMMIT');
+
+			finalExecution = await this.executionRepo.update(initialExecution.id, {
+				status: 'success',
+				results: result.rows
+			});
+		} catch (error: unknown) {
+			if (client) {
+				await client.query('ROLLBACK');
+			}
+			const errorMessage = error instanceof Error ? error.message : 'Unknown execution error';
+			finalExecution = await this.executionRepo.update(initialExecution.id, {
+				status: 'failed',
+				errorMessage: errorMessage
+			});
+		} finally {
+			client?.release();
+		}
+
+		return finalExecution;
 	}
 
 	async updateDashboard(

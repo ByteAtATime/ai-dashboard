@@ -66,7 +66,19 @@ export class DashboardRoutes {
 						userId,
 						organizationId
 					});
-					return c.json(newDashboard, 201);
+
+					// Count successfully executed items
+					const executedItemsCount = newDashboard.items.filter(
+						(item) => item.latestExecution && item.latestExecution.status === 'success'
+					).length;
+
+					return c.json(
+						{
+							dashboard: newDashboard,
+							message: `Dashboard created with ${newDashboard.items.length} items. ${executedItemsCount} items executed successfully.`
+						},
+						201
+					);
 				} catch (error) {
 					console.error('Error creating dashboard:', error);
 					if (error instanceof ForbiddenError) {
