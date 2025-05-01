@@ -1,5 +1,4 @@
 import { inject, injectable } from '@needle-di/core';
-import pg from 'pg';
 import type {
 	FullDashboard,
 	Dashboard,
@@ -16,37 +15,25 @@ import type { IDataSourceService } from '../interfaces/services/datasource.servi
 import type { IDashboardRepository } from '../interfaces/repositories/dashboard.repository.interface';
 import type { IDashboardItemRepository } from '../interfaces/repositories/dashboard-item.repository.interface';
 import type { IDashboardItemExecutionRepository } from '../interfaces/repositories/dashboard-item-execution.repository.interface';
+import type { IQueryExecutionService } from '../interfaces/services/query-execution.service.interface';
 import { PostgresDashboardRepository } from '../repositories/postgres.dashboard.repository';
 import { PostgresDashboardItemRepository } from '../repositories/postgres.dashboard-item.repository';
 import { PostgresDashboardItemExecutionRepository } from '../repositories/postgres.dashboard-item-execution.repository';
 import { DataSourceService } from './datasource.service';
+import { QueryExecutionService } from './query-execution.service';
 import { NotFoundError, ForbiddenError } from '../errors';
 
 @injectable()
 export class DashboardService implements IDashboardService {
-	private queryPools: Map<string, pg.Pool> = new Map();
-
 	constructor(
 		private dashboardRepo: IDashboardRepository = inject(PostgresDashboardRepository),
 		private itemRepo: IDashboardItemRepository = inject(PostgresDashboardItemRepository),
 		private executionRepo: IDashboardItemExecutionRepository = inject(
 			PostgresDashboardItemExecutionRepository
 		),
-		private dataSourceService: IDataSourceService = inject(DataSourceService)
+		private dataSourceService: IDataSourceService = inject(DataSourceService),
+		private queryExecutionService: IQueryExecutionService = inject(QueryExecutionService)
 	) {}
-
-	private getQueryPool(connectionString: string): pg.Pool {
-		if (this.queryPools.has(connectionString)) {
-			return this.queryPools.get(connectionString)!;
-		}
-		const newPool = new pg.Pool({
-			connectionString,
-			ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-			query_timeout: 10000
-		});
-		this.queryPools.set(connectionString, newPool);
-		return newPool;
-	}
 
 	async getDashboardsForOrganization(organizationId: string): Promise<Dashboard[]> {
 		return this.dashboardRepo.findByOrganizationId(organizationId);
@@ -111,7 +98,11 @@ export class DashboardService implements IDashboardService {
 			createdItems.map(async (item) => {
 				if (item.sql) {
 					try {
-						const execution = await this.executeItemQuery(item.id, dataSource.connectionString);
+						const execution = await this.queryExecutionService.executeQuery(
+							item.sql,
+							dataSource.connectionString,
+							item.id
+						);
 						return { ...item, latestExecution: execution };
 					} catch (error) {
 						console.error(`Error auto-executing item ${item.id}:`, error);
@@ -126,57 +117,6 @@ export class DashboardService implements IDashboardService {
 			...newDashboard,
 			items: itemsWithLatestExecution
 		};
-	}
-
-	// Add a helper method to execute the query for a dashboard item
-	private async executeItemQuery(
-		itemId: string,
-		connectionString: string
-	): Promise<DashboardItemExecution | null> {
-		const item = await this.itemRepo.findById(itemId);
-		if (!item || !item.sql) {
-			return null;
-		}
-
-		const initialExecution = await this.executionRepo.create({
-			dashboardItemId: itemId,
-			status: 'pending',
-			executedAt: new Date(),
-			results: null,
-			errorMessage: null
-		});
-		let finalExecution: DashboardItemExecution | null = initialExecution;
-
-		let client: pg.PoolClient | null = null;
-		try {
-			const pool = this.getQueryPool(connectionString);
-			client = await pool.connect();
-
-			await client.query('BEGIN TRANSACTION READ ONLY');
-			await client.query('SET statement_timeout = 10000');
-
-			const result = await client.query(item.sql);
-
-			await client.query('COMMIT');
-
-			finalExecution = await this.executionRepo.update(initialExecution.id, {
-				status: 'success',
-				results: result.rows
-			});
-		} catch (error: unknown) {
-			if (client) {
-				await client.query('ROLLBACK');
-			}
-			const errorMessage = error instanceof Error ? error.message : 'Unknown execution error';
-			finalExecution = await this.executionRepo.update(initialExecution.id, {
-				status: 'failed',
-				errorMessage: errorMessage
-			});
-		} finally {
-			client?.release();
-		}
-
-		return finalExecution;
 	}
 
 	async updateDashboard(
@@ -257,12 +197,10 @@ export class DashboardService implements IDashboardService {
 		itemId: string,
 		organizationId: string
 	): Promise<DashboardItemExecution> {
-		const itemResult = await this.itemRepo.findById(itemId);
-		if (!itemResult) {
+		const item = await this.itemRepo.findById(itemId);
+		if (!item) {
 			throw new NotFoundError('Dashboard item not found');
 		}
-
-		const item = itemResult as DashboardItem;
 
 		const dashboard = await this.dashboardRepo.findById(item.dashboardId);
 		if (!dashboard || dashboard.organizationId !== organizationId) {
@@ -276,50 +214,7 @@ export class DashboardService implements IDashboardService {
 		if (!dataSource) {
 			throw new NotFoundError('Datasource not found or not accessible by user.');
 		}
-		const connectionString = dataSource.connectionString;
 
-		const initialExecution = await this.executionRepo.create({
-			dashboardItemId: itemId,
-			status: 'pending',
-			executedAt: new Date(),
-			results: null,
-			errorMessage: null
-		});
-		let finalExecution: DashboardItemExecution | null = initialExecution;
-
-		let client: pg.PoolClient | null = null;
-		try {
-			const pool = this.getQueryPool(connectionString);
-			client = await pool.connect();
-
-			await client.query('BEGIN TRANSACTION READ ONLY');
-			await client.query('SET statement_timeout = 10000');
-
-			const result = await client.query(item.sql);
-
-			await client.query('COMMIT');
-
-			finalExecution = await this.executionRepo.update(initialExecution.id, {
-				status: 'success',
-				results: result.rows
-			});
-		} catch (error: unknown) {
-			if (client) {
-				await client.query('ROLLBACK');
-			}
-			const errorMessage = error instanceof Error ? error.message : 'Unknown execution error';
-			finalExecution = await this.executionRepo.update(initialExecution.id, {
-				status: 'failed',
-				errorMessage: errorMessage
-			});
-		} finally {
-			client?.release();
-		}
-
-		if (!finalExecution) {
-			throw new Error('Failed to update execution status after query.');
-		}
-
-		return finalExecution;
+		return this.queryExecutionService.executeQuery(item.sql, dataSource.connectionString, itemId);
 	}
 }
