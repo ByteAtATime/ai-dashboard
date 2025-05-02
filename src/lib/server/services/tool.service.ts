@@ -1,6 +1,7 @@
 import { injectable, inject } from '@needle-di/core';
 import { PostgresRepository } from '../repositories/postgres.repository';
 import type { AIToolCall, AIToolDefinition } from '../types/openrouter.types';
+import type { IRepository } from '../interfaces/repository.interface';
 
 export type HandleToolCallResult = {
 	tool_call_id: string;
@@ -10,7 +11,7 @@ export type HandleToolCallResult = {
 
 @injectable()
 export class ToolService {
-	constructor(private postgresRepository = inject(PostgresRepository)) {}
+	constructor(private postgresRepository: IRepository = inject(PostgresRepository)) {}
 
 	getToolDefinitions(): AIToolDefinition[] {
 		return [
