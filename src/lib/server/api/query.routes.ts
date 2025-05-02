@@ -17,11 +17,10 @@ export class QueryRoutes {
 		private dataSourceService = inject(DataSourceService)
 	) {
 		this.app = new Hono();
-		this.setupRoutes();
 	}
 
-	private setupRoutes() {
-		this.app.post('/stream', async (c) => {
+	public routes() {
+		return this.app.post('/stream', async (c) => {
 			return streamText(c, async (stream) => {
 				try {
 					const body = await c.req.json();
@@ -143,8 +142,6 @@ export class QueryRoutes {
 			});
 		});
 	}
-
-	public routes() {
-		return this.app;
-	}
 }
+
+export type QueryRoutesType = ReturnType<QueryRoutes['routes']>;

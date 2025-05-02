@@ -25,36 +25,31 @@ export class Api implements IApi {
 		private dataSourceRoutes = inject(DataSourceRoutes)
 	) {
 		this.app = new Hono<AppEnv>().basePath('/api');
-		this.setupRoutes();
-	}
-
-	private setupRoutes() {
-		this.app.use('*', async (c, next) => {
-			const session = await auth.api.getSession({ headers: c.req.raw.headers });
-			c.set(
-				'user',
-				session
-					? { ...session.user, activeOrganizationId: session.session.activeOrganizationId }
-					: undefined
-			);
-
-			await next();
-		});
-
-		this.app.get('/', (c) => c.text('API Running'));
-		// @ts-expect-error -- TODO: why does it not recognize the `handler` method?
-		this.app.on(['POST', 'GET'], ['/auth/:rest{.*}'], (c) => auth.handler(c.req.raw));
-
-		this.app.route('/dashboards', this.dashboardRoutes.routes());
-
-		this.app.route('/query', this.queryRoutes.routes());
-
-		this.app.route('/datasources', this.dataSourceRoutes.routes());
 	}
 
 	public routes() {
-		return this.app;
+		return (
+			this.app
+				.use('*', async (c, next) => {
+					const session = await auth.api.getSession({ headers: c.req.raw.headers });
+					c.set(
+						'user',
+						session
+							? { ...session.user, activeOrganizationId: session.session.activeOrganizationId }
+							: undefined
+					);
+
+					await next();
+				})
+				.get('/', (c) => c.text('API Running'))
+				// @ts-expect-error -- TODO: why does it not recognize the `handler` method
+				.on(['POST', 'GET'], ['/auth/:rest{.*}'], (c) => auth.handler(c.req.raw))
+				.route('/dashboards', this.dashboardRoutes.routes())
+				.route('/query', this.queryRoutes.routes())
+				.route('/datasources', this.dataSourceRoutes.routes())
+		);
 	}
 }
 
 export const routes = new Container().get(Api).routes();
+export type ApiRoutes = ReturnType<Api['routes']>;
