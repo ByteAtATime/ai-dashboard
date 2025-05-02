@@ -45,17 +45,15 @@ export class ToolService {
 		progressCallback?: (message: string) => Promise<void>
 	): Promise<HandleToolCallResult> {
 		const functionName = toolCall.function.name;
-		const sanitizedArgs = this.sanitizeToolCallArguments(toolCall.function.arguments);
 
 		let functionArgs: { tableName: string; numRows: number };
 		try {
-			functionArgs = JSON.parse(sanitizedArgs);
+			functionArgs = JSON.parse(toolCall.function.arguments);
 		} catch (error) {
 			console.error(
-				`Failed to parse tool call arguments after sanitization: ${error instanceof Error ? error.message : 'Unknown error'}`
+				`Failed to parse tool call arguments: ${error instanceof Error ? error.message : 'Unknown error'}`
 			);
-			console.error(`Original arguments: ${toolCall.function.arguments}`);
-			console.error(`Sanitized arguments: ${sanitizedArgs}`);
+			console.error(`Arguments: ${toolCall.function.arguments}`);
 			throw new Error(`Unable to parse arguments for ${functionName}`);
 		}
 
@@ -81,68 +79,5 @@ export class ToolService {
 			name: functionName,
 			content: JSON.stringify(functionResult)
 		};
-	}
-
-	private sanitizeToolCallArguments(argsString: string): string {
-		if (argsString.includes('}{') || argsString.match(/\d+\{/)) {
-			try {
-				JSON.parse(argsString);
-				return argsString;
-			} catch {
-				const openBraces = argsString.match(/{/g)?.length || 0;
-				const closeBraces = argsString.match(/}/g)?.length || 0;
-
-				if (openBraces > 1 && openBraces > closeBraces) {
-					const splitMatches = argsString.match(/(\d+)({)/);
-					if (splitMatches && splitMatches.index) {
-						const splitIndex = splitMatches.index + splitMatches[1].length;
-						const fixed = argsString.substring(0, splitIndex) + '}';
-
-						try {
-							JSON.parse(fixed);
-							return fixed;
-						} catch {
-							// JSON.parse failed
-						}
-					}
-				}
-
-				const secondBraceIndex = argsString.indexOf('{', 1);
-				if (secondBraceIndex > 0) {
-					const secondHalf = argsString.substring(secondBraceIndex);
-					try {
-						JSON.parse(secondHalf);
-						return secondHalf;
-					} catch {
-						// JSON.parse failed
-					}
-				}
-
-				if (argsString.includes('}{')) {
-					const parts = argsString.split('}{');
-					const fixedSecondPart = '{' + parts[1];
-
-					try {
-						JSON.parse(fixedSecondPart);
-						return fixedSecondPart;
-					} catch {
-						// JSON.parse failed
-					}
-				}
-
-				const jsonPattern = /{[^{}]*}/;
-				const match = argsString.match(jsonPattern);
-				if (match && match[0]) {
-					try {
-						JSON.parse(match[0]);
-						return match[0];
-					} catch {
-						// JSON.parse failed
-					}
-				}
-			}
-		}
-
-		return argsString;
 	}
 }
